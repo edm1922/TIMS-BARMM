@@ -26,8 +26,8 @@
 /* Sidebar panel ---------------------------------------------------- */
 
 .app-sidebar {
-    --bs-offcanvas-bg: #1b2435;
-    --bs-offcanvas-color: #f8fafc;
+    --bs-offcanvas-bg: #2c3340;
+    --bs-offcanvas-color: #f6f7fb;
     --bs-offcanvas-border-color: rgba(255, 255, 255, .08);
 
     display: flex;
@@ -56,8 +56,8 @@
     flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
-    background: #1b2435;
-    color: #f8fafc;
+    background: #2c3340;
+    color: #f6f7fb;
 }
 
 /* Brand ------------------------------------------------------------ */
@@ -180,7 +180,7 @@
 }
 
 .app-nav .nav-link:hover .app-nav-icon {
-    color: #e2e8f0;
+    color: #e5e7eb;
 }
 
 .app-nav .nav-link.active .app-nav-icon {
@@ -224,8 +224,8 @@
 /* Mobile drawer header (hidden by Bootstrap from the lg breakpoint) -- */
 
 .app-sidebar-header {
-    background: #1b2435;
-    color: #f8fafc;
+    background: #2c3340;
+    color: #f6f7fb;
     border-bottom: 1px solid rgba(255, 255, 255, .08);
 }
 
@@ -241,8 +241,8 @@
     align-items: center;
     gap: .75rem;
     padding: .7rem 1rem;
-    background: #1b2435;
-    color: #f8fafc;
+    background: #2c3340;
+    color: #f6f7fb;
     border-bottom: 1px solid rgba(255, 255, 255, .08);
 }
 
@@ -287,7 +287,7 @@
         max-width: 270px;
         height: 100vh;
         min-height: 100vh;
-        background: #1b2435;
+        background: #2c3340;
     }
 
     .app-sidebar.offcanvas-lg {
@@ -296,7 +296,7 @@
         display: flex !important;
         flex-direction: column !important;
         flex: 1 1 auto !important;
-        background-color: #1b2435 !important;
+        background-color: #2c3340 !important;
     }
 
     .app-sidebar.offcanvas-lg > .offcanvas-body {
@@ -402,7 +402,7 @@
 }
 
 .kpi-hero-link {
-    color: #1d4ed8;
+    color: #16357C;
     font-size: .85rem;
     font-weight: 500;
     text-decoration: none;
@@ -656,7 +656,7 @@
     padding: .9rem 1rem;
     border: 1px solid rgba(15, 23, 42, .07);
     border-radius: .6rem;
-    background: #f8fafc;
+    background: #f6f7fb;
 }
 
 .batch-summary-figure {
@@ -720,7 +720,7 @@
 }
 
 .batch-list-link:hover {
-    color: #1d4ed8;
+    color: #16357C;
 }
 
 .batch-list-name {
@@ -743,7 +743,7 @@
 }
 
 .batch-list-empty a {
-    color: #1d4ed8;
+    color: #16357C;
 }
 
 /* Level 4 — data quality */
@@ -854,7 +854,7 @@ a.dq-item:hover {
 }
 
 .panel-table thead th {
-    background: #f8fafc;
+    background: #f6f7fb;
     color: #475569;
     font-weight: 500;
     font-size: .85rem;
@@ -882,7 +882,7 @@ a.dq-item:hover {
 
 .status-badge-info {
     background: rgba(49, 109, 219, .16);
-    color: #1d4ed8;
+    color: #16357C;
 }
 
 .status-badge-success {
@@ -936,7 +936,7 @@ a.dq-item:hover {
 }
 
 .quick-action.is-primary .quick-action-title {
-    color: #1d4ed8;
+    color: #16357C;
 }
 
 .quick-action-icon {
@@ -1082,15 +1082,15 @@ a.dq-item:hover {
     flex: 0 0 236px;
     width: 236px;
     max-width: 236px;
-    background: #172235;
+    background: #2c3340;
 }
 
 .app-sidebar {
-    --bs-offcanvas-bg: #172235;
+    --bs-offcanvas-bg: #2c3340;
 }
 
 .app-sidebar-inner {
-    background: #172235;
+    background: #2c3340;
 }
 
 .app-sidebar-brand {
@@ -1121,13 +1121,13 @@ a.dq-item:hover {
 }
 
 .app-nav .nav-link.active {
-    background: #2563eb;
+    background: #1E429B;
     box-shadow: 0 1px 2px rgba(0, 0, 0, .18);
 }
 
 .app-nav .nav-link.active:hover,
 .app-nav .nav-link.active:focus {
-    background: #1d4ed8;
+    background: #16357C;
 }
 
 .app-nav-icon {
@@ -1137,7 +1137,7 @@ a.dq-item:hover {
 
 .app-sidebar-footer {
     padding: .9rem 1.1rem 1.1rem;
-    background: #131c2a;
+    background: #242a33;
 }
 
 
@@ -1155,7 +1155,7 @@ a.dq-item:hover {
     }
 }
 
-.app-sidebar-inner { background: #172337; }
+.app-sidebar-inner { background: #2c3340; }
 
 .app-sidebar-brand {
     display: flex;
@@ -1217,7 +1217,7 @@ a.dq-item:hover {
 
 .app-nav .nav-link:hover {
     background: rgba(255, 255, 255, .07);
-    color: #f8fafc;
+    color: #f6f7fb;
 }
 
 .app-nav .nav-link:focus-visible {
@@ -1226,7 +1226,7 @@ a.dq-item:hover {
 }
 
 .app-nav .nav-link.active {
-    background: #2563eb;
+    background: #1E429B;
     color: #fff;
     font-weight: 600;
     box-shadow: 0 1px 2px rgba(0, 0, 0, .22), inset 3px 0 0 rgba(255, 255, 255, .9);
@@ -1234,7 +1234,7 @@ a.dq-item:hover {
 
 .app-nav .nav-link.active:hover,
 .app-nav .nav-link.active:focus {
-    background: #1d4ed8;
+    background: #16357C;
     color: #fff;
 }
 
@@ -1245,7 +1245,7 @@ a.dq-item:hover {
     flex: 0 0 auto;
 }
 
-.app-nav .nav-link:hover .app-nav-icon { color: #e2e8f0; }
+.app-nav .nav-link:hover .app-nav-icon { color: #e5e7eb; }
 .app-nav .nav-link.active .app-nav-icon { color: #fff; }
 
 .app-nav .nav-link .badge {
@@ -1262,7 +1262,7 @@ a.dq-item:hover {
     flex-direction: column;
     gap: 6px;
     padding: .75rem .8rem .85rem;
-    background: #131c2a;
+    background: #242a33;
     border-top: 1px solid rgba(255, 255, 255, .08);
 }
 
@@ -1321,7 +1321,7 @@ a.dq-item:hover {
     height: 32px;
     flex: 0 0 auto;
     border-radius: 50%;
-    background: #2563eb;
+    background: #1E429B;
     color: #fff;
     font-size: .78rem;
     font-weight: 700;
@@ -1335,7 +1335,7 @@ a.dq-item:hover {
 }
 
 .app-sidebar-user-name {
-    color: #f8fafc;
+    color: #f6f7fb;
     font-size: .82rem;
     font-weight: 600;
     line-height: 1.2;
@@ -1461,7 +1461,7 @@ a.dq-item:hover {
         height: 20px;
         margin-top: -10px;
         border-radius: 0 3px 3px 0;
-        background: #2563eb;
+        background: #1E429B;
     }
 }
 
@@ -1503,8 +1503,8 @@ a.dq-item:hover {
     }
 
     .app-sidebar-edge-toggle:hover {
-        background: #2563eb;
-        border-color: #2563eb;
+        background: #1E429B;
+        border-color: #1E429B;
         color: #fff;
     }
 

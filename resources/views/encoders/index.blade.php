@@ -130,7 +130,7 @@
                                         </td>
                                     </tr>
                                     <tr class="collapse" id="encoder-{{ $encoder->id }}">
-                                        <td colspan="5" style="background: #f8fafc;">
+                                        <td colspan="5" style="background: #f6f7fb;">
                                             <form method="POST" action="{{ route('encoders.update', $encoder) }}" class="encoder-edit-form encoder-form">
                                                 @csrf
                                                 @method('PUT')

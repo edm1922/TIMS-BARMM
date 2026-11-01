@@ -10,8 +10,8 @@
                     : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
                 document.documentElement.setAttribute('data-bs-theme', theme);
 
-                if (window.localStorage.getItem('tims-sidebar') === 'collapsed') {
-                    document.documentElement.setAttribute('data-sidebar', 'collapsed');
+                if (window.localStorage.getItem('tims-sidebar') === 'hidden') {
+                    document.documentElement.setAttribute('data-sidebar', 'hidden');
                 }
             } catch (error) {
                 document.documentElement.setAttribute('data-bs-theme', 'light');
@@ -38,11 +38,12 @@
           href="{{ asset('favicon.png') }}?v={{ filemtime($faviconPng) }}">
     <link rel="apple-touch-icon" sizes="180x180"
           href="{{ asset('apple-touch-icon.png') }}?v={{ filemtime($touchIcon) }}">
-    <meta name="theme-color" content="#172337">
+    <meta name="theme-color" content="#2c3340">
     <link rel="stylesheet" href="{{ asset('assets/css/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ asset('assets/css/app.css') }}?v={{ filemtime(public_path('assets/css/app.css')) }}">
     @include('partials.modal-system')
     @include('partials.theme-styles')
+    @include('partials.gips-theme')
     @auth
     <style>
         /* Critical sidebar brand rules. Kept inline so a stale/cached
@@ -100,6 +101,67 @@
 </head>
 <body class="bg-body-tertiary">
 @auth
+    <nav class="app-topbar gips-topbar no-print" role="navigation" aria-label="Primary">
+        <div class="container-fluid gips-topbar-inner">
+            <button class="gips-icon-btn" type="button" id="sidebarMenuToggle"
+                    data-bs-target="#appSidebar"
+                    aria-controls="appSidebar" aria-expanded="true" aria-label="Close navigation"
+                    title="Toggle navigation">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/>
+                </svg>
+            </button>
+
+            <a class="gips-topbar-brand" href="{{ route('dashboard') }}">
+                <img src="{{ asset('images/RGB-DOLE-LOGO-WITH-BLACK-WORDMARK-PNG.png') }}"
+                     alt="Department of Labor and Employment" width="569" height="600" decoding="async">
+                <span class="gips-topbar-brand-name d-none d-md-inline">TUPAD INFORMATION MANAGEMENT SYSTEM OF BARMM</span>
+                <span class="gips-topbar-brand-short d-md-none">{{ config('app.name') }}</span>
+            </a>
+
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <button type="button" class="theme-toggle theme-toggle--compact" data-theme-toggle
+                        aria-pressed="false" aria-label="Switch to dark theme" title="Switch to dark theme">
+                    <svg class="theme-icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/>
+                        <path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/>
+                        <path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/>
+                        <path d="m19.07 4.93-1.41 1.41"/>
+                    </svg>
+                    <svg class="theme-icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>
+                    </svg>
+                    <span class="visually-hidden" data-theme-label>Dark mode</span>
+                </button>
+
+                <div class="dropdown">
+                    <button class="gips-user-trigger" type="button" data-bs-toggle="dropdown"
+                            aria-expanded="false" aria-label="Open user menu">
+                        <span class="gips-avatar" aria-hidden="true">{{ mb_strtoupper(mb_substr(trim(auth()->user()->name), 0, 1)) }}</span>
+                        <span class="d-none d-lg-inline">{{ auth()->user()->name }}</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li class="gips-menu-header">
+                            <div class="gips-menu-name">{{ auth()->user()->name }}</div>
+                            <div class="gips-menu-role">{{ \App\Models\User::ROLE_LABELS[auth()->user()->role] ?? auth()->user()->role }}</div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ route('dashboard') }}">Dashboard</a></li>
+                        <li>
+                            <form method="POST" action="{{ route('logout') }}">
+                                @csrf
+                                <button type="submit" class="dropdown-item gips-menu-logout">Log Out</button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
     <div class="app-shell">
         <div class="navbar-expand-lg app-sidebar-wrapper">
             <aside class="app-sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="appSidebar"
@@ -111,18 +173,21 @@
                 </div>
                 <div class="offcanvas-body">
                     <div class="app-sidebar-inner">
-                        <a class="app-sidebar-brand" href="{{ Route::has('dashboard') ? route('dashboard') : '#' }}">
-                            <img src="{{ asset('images/RGB-DOLE-LOGO-WITH-BLACK-WORDMARK-PNG.png') }}"
-                                 alt="Department of Labor and Employment"
-                                 class="app-sidebar-brand-logo" width="569" height="600" decoding="async">
-                            <span class="app-sidebar-brand-copy">
-                                {{ config('app.name') }}
-                                <small class="app-sidebar-brand-subtitle">DOLE 12</small>
+                        <div class="app-sidebar-profile">
+                            <span class="app-sidebar-profile-avatar" aria-hidden="true">
+                                {{ mb_strtoupper(mb_substr(trim(auth()->user()->name), 0, 1)) }}
                             </span>
-                        </a>
+                            <div class="app-sidebar-profile-copy">
+                                <div class="app-sidebar-profile-name">{{ auth()->user()->name }}</div>
+                                <span class="app-sidebar-profile-role">
+                                    {{ \App\Models\User::ROLE_LABELS[auth()->user()->role] ?? auth()->user()->role }}
+                                </span>
+                            </div>
+                        </div>
 
                         <nav class="app-nav" aria-label="Main navigation">
                             <ul class="nav flex-column">
+                                <li class="app-nav-section" aria-hidden="true">Main</li>
                                 <li class="nav-item">
                                     <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}"
                                        href="{{ route('dashboard') }}">
@@ -161,6 +226,7 @@
                                      feature. Offline installations show their accounts through User
                                      Monitoring on the central per-server page instead. --}}
                                 @if (Route::has('users.index') && auth()->user()->isAdmin() && \App\Support\SyncIdentity::isOnline())
+                                    <li class="app-nav-section" aria-hidden="true">Administration</li>
                                     <li class="nav-item">
                                         <a class="nav-link {{ request()->routeIs('users.*') ? 'active' : '' }}"
                                            href="{{ route('users.index') }}">
@@ -255,82 +321,14 @@
                             </ul>
                         </nav>
 
-                        <div class="app-sidebar-footer">
-                            <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false"
-                                    aria-label="Switch to dark theme" title="Switch to dark theme">
-                                <svg class="theme-icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/>
-                                    <path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/>
-                                    <path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/>
-                                    <path d="m19.07 4.93-1.41 1.41"/>
-                                </svg>
-                                <svg class="theme-icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>
-                                </svg>
-                                <span data-theme-label>Dark mode</span>
-                            </button>
-                            <div class="app-sidebar-user">
-                                <div class="app-sidebar-avatar" aria-hidden="true">
-                                    {{ mb_strtoupper(mb_substr(trim(auth()->user()->name), 0, 1)) }}
-                                </div>
-                                <div class="app-sidebar-user-copy">
-                                    <div class="app-sidebar-user-name">{{ auth()->user()->name }}</div>
-                                    <span class="badge text-bg-secondary">{{ \App\Models\User::ROLE_LABELS[auth()->user()->role] ?? auth()->user()->role }}</span>
-                                </div>
-                            </div>
-                            <form method="POST" action="{{ route('logout') }}">
-                                @csrf
-                                <button type="submit" class="btn btn-sm btn-outline-light w-100"
-                                        aria-label="Log out" title="Log out">
-                                    @include('partials.nav-icon', ['name' => 'logout'])
-                                    <span>Log out</span>
-                                </button>
-                            </form>
-                        </div>
                     </div>
                 </div>
             </aside>
-            <button type="button" class="app-sidebar-edge-toggle" id="sidebarToggle"
-                    aria-label="Collapse sidebar" aria-expanded="true" aria-controls="appSidebar"
-                    title="Collapse sidebar">
-                <svg class="app-sidebar-edge-toggle-icon" width="14" height="14" viewBox="0 0 24 24"
-                     fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                     stroke-linejoin="round" aria-hidden="true">
-                    <path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>
-                </svg>
-                <span class="visually-hidden" data-sidebar-label>Collapse sidebar</span>
-            </button>
+
         </div>
 
         <div class="app-content">
-            <header class="app-topbar d-lg-none no-print">
-                <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="offcanvas"
-                        data-bs-target="#appSidebar" aria-controls="appSidebar" aria-label="Open navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <img src="{{ asset('images/RGB-DOLE-LOGO-WITH-BLACK-WORDMARK-PNG.png') }}"
-                     alt="Department of Labor and Employment"
-                     class="app-topbar-logo" width="569" height="600" decoding="async">
-                <span class="app-topbar-title">{{ config('app.name') }}</span>
-                <span class="app-topbar-user ms-auto">{{ auth()->user()->name }}</span>
-                <button type="button" class="theme-toggle theme-toggle--compact" data-theme-toggle aria-pressed="false"
-                        aria-label="Switch to dark theme" title="Switch to dark theme">
-                    <svg class="theme-icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/>
-                        <path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/>
-                        <path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/>
-                        <path d="m19.07 4.93-1.41 1.41"/>
-                    </svg>
-                    <svg class="theme-icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>
-                    </svg>
-                    <span class="visually-hidden" data-theme-label>Dark mode</span>
-                </button>
-            </header>
+
 
             <main class="app-main container-fluid py-4 px-4">
                 @include('partials.flash-messages')

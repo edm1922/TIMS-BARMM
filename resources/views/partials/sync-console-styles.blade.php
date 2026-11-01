@@ -1,12 +1,12 @@
     <style>
         .sync-console {
-            --sync-primary: #2563eb;
-            --sync-primary-strong: #1d4ed8;
+            --sync-primary: #1E429B;
+            --sync-primary-strong: #16357C;
             --sync-text: #0f172a;
             --sync-muted: #64748b;
-            --sync-border: #e2e8f0;
+            --sync-border: #e5e7eb;
             --sync-surface: #ffffff;
-            --sync-canvas: #f8fafc;
+            --sync-canvas: #f6f7fb;
             --sync-success: #15803d;
             --sync-success-soft: #dcfce7;
             --sync-warning: #92400e;
@@ -87,7 +87,7 @@
             border-color: var(--sync-border);
             color: var(--sync-text);
         }
-        .sync-console .sync-btn--secondary:hover { border-color: #cbd5e1; background: #f8fafc; }
+        .sync-console .sync-btn--secondary:hover { border-color: #cbd5e1; background: #f6f7fb; }
         .sync-console .sync-btn--warning {
             background: #fff7ed;
             border-color: #fed7aa;
@@ -192,7 +192,7 @@
         .sync-console .sync-kv-value code {
             font-size: 12.5px;
             color: #1e293b;
-            background: #f8fafc;
+            background: #f6f7fb;
             border: 1px solid #eef2f7;
             border-radius: 5px;
             padding: 1px 5px;
@@ -214,7 +214,7 @@
             background: #fff;
             color: var(--sync-text);
         }
-        .sync-console .sync-input:focus { outline: 2px solid rgba(37, 99, 235, .25); border-color: var(--sync-primary); }
+        .sync-console .sync-input:focus { outline: 2px solid rgba(30, 66, 155, .25); border-color: var(--sync-primary); }
         .sync-console .sync-input.is-invalid { border-color: var(--sync-danger); }
         .sync-console .sync-field .invalid-feedback { font-size: 12px; }
 
@@ -294,7 +294,7 @@
             position: sticky;
             top: 0;
             z-index: 1;
-            background: #f8fafc;
+            background: #f6f7fb;
             color: var(--sync-muted);
             font-size: 12px;
             font-weight: 600;
@@ -309,7 +309,7 @@
             vertical-align: top;
         }
         .sync-console .sync-ops-table tbody tr:last-child td { border-bottom: 0; }
-        .sync-console .sync-ops-table tbody tr:hover { background: #f8fafc; }
+        .sync-console .sync-ops-table tbody tr:hover { background: #f6f7fb; }
         .sync-console .sync-ops-when { white-space: nowrap; color: var(--sync-muted); }
         .sync-console .sync-ops-entity { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
         .sync-console .sync-ops-kind { color: var(--sync-muted); font-size: 12.5px; }
@@ -322,7 +322,7 @@
             vertical-align: bottom;
             font-size: 12px;
             color: #334155;
-            background: #f8fafc;
+            background: #f6f7fb;
             border: 1px solid #eef2f7;
             border-radius: 5px;
             padding: 2px 5px;

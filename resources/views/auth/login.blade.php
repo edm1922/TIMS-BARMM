@@ -12,132 +12,150 @@
         justify-content: center;
         padding: 1.5rem 0;
         background:
-            radial-gradient(1100px 420px at 50% -10%, rgba(37, 99, 235, .10), transparent 60%),
-            radial-gradient(700px 320px at 100% 100%, rgba(18, 59, 140, .07), transparent 60%);
-        border-radius: 1rem;
+            radial-gradient(1000px 380px at 15% 0%, rgba(30, 66, 155, .07), transparent 60%),
+            radial-gradient(800px 380px at 90% 100%, rgba(30, 66, 155, .05), transparent 60%);
     }
 
-    .login-card {
-        width: 100%;
-        max-width: 460px;
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        box-shadow: 0 22px 48px -22px rgba(15, 23, 42, .28), 0 2px 8px rgba(15, 23, 42, .05);
+    .login-container {
+        display: flex;
+        width: 850px;
+        max-width: 100%;
+        min-height: 520px;
         overflow: hidden;
+        border-radius: 20px;
         background: #fff;
+        box-shadow: 0 20px 45px rgba(0, 0, 0, .22), 0 10px 10px rgba(0, 0, 0, .1);
     }
 
-    .login-card-accent {
-        height: 4px;
-        background: linear-gradient(90deg, #123b8c 0 55%, #dc2626 55% 100%);
+    .login-overlay {
+        width: 45%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2.5rem 2.2rem;
+        text-align: center;
+        color: #1f2937;
+        background:
+            radial-gradient(600px 300px at 50% 0%, rgba(30, 66, 155, .10), transparent 65%),
+            #f6f7fb;
+        border-right: 1px solid #e5e7eb;
     }
 
-    .login-body {
-        padding: 34px 36px 30px;
-    }
-
-    .login-logo {
-        display: block;
-        width: 96px;
-        max-width: 42%;
+    .login-overlay-logo {
+        width: min(150px, 70%);
         height: auto;
-        margin: 0 auto 14px;
+        margin-bottom: 1.1rem;
     }
 
-    .login-brand-title {
+    .login-overlay h1 {
         margin: 0;
-        font-size: 21px;
-        font-weight: 700;
-        letter-spacing: .01em;
-        color: #0f172a;
-        text-align: center;
+        font-size: 2rem;
+        font-weight: 800;
+        letter-spacing: -.01em;
+        color: #1f2937;
     }
 
-    .login-brand-subtitle {
-        margin: 4px 0 0;
-        font-size: 11.5px;
-        font-weight: 500;
-        letter-spacing: .06em;
+    .login-overlay p {
+        margin: .5rem 0 0;
+        max-width: 28ch;
+        color: #4b5563;
+        font-size: .9rem;
+        line-height: 1.55;
+    }
+
+    .login-overlay .login-overlay-note {
+        margin-top: 1.25rem;
+        font-size: .72rem;
+        font-weight: 600;
+        letter-spacing: .08em;
         text-transform: uppercase;
-        color: #64748b;
-        text-align: center;
+        color: #6b7280;
     }
 
-    .login-divider {
-        height: 1px;
-        background: #e2e8f0;
-        margin: 22px 0 20px;
+    .login-form-panel {
+        width: 55%;
+        padding: 2.6rem 3.2rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        background: #f6f7fb;
     }
 
-    .login-heading {
+    .login-form-panel h2 {
         margin: 0;
-        font-size: 19px;
-        font-weight: 600;
-        color: #0f172a;
         text-align: center;
+        font-size: 2rem;
+        font-weight: 800;
+        color: #333;
     }
 
-    .login-subheading {
-        margin: 4px 0 0;
-        font-size: 12.5px;
-        color: #64748b;
+    .login-form-subtitle {
+        margin: .35rem 0 1.4rem;
         text-align: center;
+        font-size: .78rem;
+        color: #777;
     }
 
-    .login-form-label {
-        font-size: 12.5px;
+    .login-alert {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        margin-bottom: 14px;
+        padding: 10px 12px;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        background: #fef2f2;
+        color: #7f1d1d;
+        font-size: .78rem;
+        line-height: 1.45;
+    }
+
+    .login-alert svg { flex: 0 0 auto; margin-top: 1px; }
+
+    .login-field { margin-bottom: 10px; }
+
+    .login-field label {
+        display: block;
+        margin: 0 0 4px;
+        font-size: .74rem;
         font-weight: 600;
-        color: #334155;
-        margin-bottom: 5px;
+        color: #4b5563;
     }
 
     .login-input-wrap { position: relative; }
 
-    .login-input-wrap .login-input-icon {
-        position: absolute;
-        left: 12px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #94a3b8;
-        pointer-events: none;
-        display: inline-flex;
-    }
-
     .login-input {
-        min-height: 46px;
-        padding: 10px 12px 10px 38px;
-        font-size: 14px;
-        color: #0f172a;
-        background: #fff;
-        border: 1px solid #cbd5e1;
+        width: 100%;
+        min-height: 44px;
+        padding: 11px 14px;
+        border: 1px solid transparent;
         border-radius: 8px;
-        transition: border-color .15s ease, box-shadow .15s ease;
+        background: #eee;
+        color: #1f2937;
+        font-size: .875rem;
+        outline: none;
+        transition: box-shadow .15s ease, background-color .15s ease;
     }
-
-    .login-input::placeholder { color: #94a3b8; }
 
     .login-input:focus {
-        border-color: #2563eb;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, .18);
+        background: #fff;
+        box-shadow: 0 0 0 2px rgba(30, 66, 155, .2);
     }
 
     .login-input.is-invalid {
-        border-color: #dc2626;
-        background-image: none;
-    }
-
-    .login-input.is-invalid:focus {
-        box-shadow: 0 0 0 3px rgba(220, 38, 38, .15);
+        background: #fff5f5;
+        box-shadow: 0 0 0 2px rgba(220, 38, 38, .22);
     }
 
     .login-field-error {
         display: block;
-        margin-top: 5px;
-        font-size: 12px;
+        margin-top: 4px;
         color: #dc2626;
+        font-size: .72rem;
     }
 
-    .login-password-wrap .login-input { padding-right: 46px; }
+    .login-password-wrap .login-input { padding-right: 44px; }
 
     .login-password-toggle {
         position: absolute;
@@ -147,18 +165,18 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 34px;
-        height: 34px;
+        width: 32px;
+        height: 32px;
         padding: 0;
         border: 0;
         border-radius: 6px;
         background: transparent;
-        color: #64748b;
+        color: #6b7280;
         cursor: pointer;
     }
 
-    .login-password-toggle:hover { background: #f1f5f9; color: #0f172a; }
-    .login-password-toggle:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+    .login-password-toggle:hover { background: #e5e7eb; color: #1f2937; }
+    .login-password-toggle:focus-visible { outline: 2px solid #1E429B; outline-offset: 1px; }
     .login-password-toggle .eye-off { display: none; }
     .login-password-toggle[aria-pressed="true"] .eye-on { display: none; }
     .login-password-toggle[aria-pressed="true"] .eye-off { display: inline-flex; }
@@ -167,57 +185,56 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        min-height: 32px;
+        margin: 2px 0 14px;
+        min-height: 28px;
     }
 
     .login-remember .form-check-input {
-        margin-top: 0;
-        width: 16px;
-        height: 16px;
-        border-color: #94a3b8;
+        width: 15px;
+        height: 15px;
+        margin: 0;
+        border-color: #9ca3af;
     }
 
     .login-remember .form-check-input:checked {
-        background-color: #2563eb;
-        border-color: #2563eb;
+        background-color: #1E429B;
+        border-color: #1E429B;
     }
 
     .login-remember .form-check-input:focus {
-        border-color: #2563eb;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, .18);
+        border-color: #1E429B;
+        box-shadow: 0 0 0 2px rgba(30, 66, 155, .2);
     }
 
     .login-remember .form-check-label {
-        font-size: 13px;
-        color: #334155;
+        font-size: .78rem;
+        color: #4b5563;
         cursor: pointer;
     }
 
     .login-submit {
-        min-height: 46px;
         width: 100%;
-        border: 0;
-        border-radius: 8px;
-        background: #2563eb;
+        min-height: 44px;
+        border: 1px solid #1E429B;
+        border-radius: 20px;
+        background: #1E429B;
         color: #fff;
-        font-size: 14px;
-        font-weight: 600;
-        transition: background-color .16s ease, box-shadow .16s ease;
+        font-size: .76rem;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        transition: background-color .15s ease, transform 80ms ease;
     }
 
-    .login-submit:hover { background: #1d4ed8; color: #fff; }
-    .login-submit:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
-
-    .login-submit:disabled {
-        background: #93c5fd;
-        cursor: not-allowed;
-        opacity: 1;
-    }
+    .login-submit:hover { background: #16357C; border-color: #16357C; color: #fff; }
+    .login-submit:active { transform: scale(.97); }
+    .login-submit:focus-visible { outline: 2px solid #1E429B; outline-offset: 2px; }
+    .login-submit:disabled { opacity: .7; cursor: not-allowed; }
 
     .login-submit .login-spinner {
         display: none;
-        width: 15px;
-        height: 15px;
+        width: 14px;
+        height: 14px;
         margin-right: 8px;
         border: 2px solid rgba(255, 255, 255, .5);
         border-top-color: #fff;
@@ -227,41 +244,56 @@
     }
 
     .login-submit.is-loading .login-spinner { display: inline-block; }
-
     @keyframes login-spin { to { transform: rotate(360deg); } }
 
-    .login-alert {
-        display: flex;
-        gap: 9px;
-        align-items: flex-start;
-        margin-bottom: 16px;
-        padding: 10px 12px;
-        border: 1px solid #fecaca;
-        border-radius: 8px;
-        background: #fef2f2;
-        color: #7f1d1d;
-        font-size: 12.5px;
-        line-height: 1.45;
-    }
-
-    .login-alert svg { flex: 0 0 auto; margin-top: 1px; }
-
     .login-footer {
-        margin-top: 20px;
+        margin-top: 18px;
         text-align: center;
-        color: #64748b;
-        font-size: 11px;
+        color: #6b7280;
+        font-size: .68rem;
         line-height: 1.6;
     }
 
-    .login-footer strong { color: #475569; font-weight: 600; }
+    .login-footer strong { color: #4b5563; font-weight: 600; }
 
-    @media (max-width: 575.98px) {
-        .login-shell { padding: .75rem 0; min-height: calc(100vh - 1.5rem); }
-        .login-body { padding: 26px 20px 22px; }
-        .login-logo { width: 84px; }
-        .login-brand-title { font-size: 19px; }
+    @media (max-width: 899.98px) {
+        .login-container { flex-direction: column; width: 100%; min-height: 0; }
+        .login-overlay { width: 100%; padding: 1.8rem 1.5rem; border-right: 0; border-bottom: 1px solid #e5e7eb; }
+        .login-overlay-logo { width: 92px; margin-bottom: .65rem; }
+        .login-overlay h1 { font-size: 1.5rem; }
+        .login-overlay p, .login-overlay .login-overlay-note { display: none; }
+        .login-form-panel { width: 100%; padding: 1.8rem 1.4rem; }
+        .login-form-panel h2 { font-size: 1.6rem; }
     }
+
+    /* The GIPS auth card is always light; keep its inputs light in dark mode too. */
+    html[data-bs-theme="dark"] .login-input {
+        background: #eee !important;
+        color: #1f2937 !important;
+        border-color: transparent !important;
+    }
+
+    html[data-bs-theme="dark"] .login-input:focus {
+        background: #fff !important;
+        box-shadow: 0 0 0 2px rgba(30, 66, 155, .28) !important;
+    }
+
+    html[data-bs-theme="dark"] .login-input::placeholder { color: #6b7280 !important; }
+    html[data-bs-theme="dark"] .login-password-toggle { color: #6b7280; }
+    html[data-bs-theme="dark"] .login-password-toggle:hover { background: #e5e7eb; color: #1f2937; }
+
+    html[data-bs-theme="dark"] .login-remember .form-check-input {
+        background-color: #fff !important;
+        border-color: #9ca3af !important;
+    }
+
+    html[data-bs-theme="dark"] .login-remember .form-check-input:checked {
+        background-color: #1E429B !important;
+        border-color: #1E429B !important;
+    }
+
+    html[data-bs-theme="dark"] .login-footer { color: #94a3b8; }
+    html[data-bs-theme="dark"] .login-footer strong { color: #e2e8f0; }
 
     @media (prefers-reduced-motion: reduce) {
         .login-submit .login-spinner { animation-duration: 2s; }
@@ -269,23 +301,21 @@
 </style>
 
 <div class="login-shell">
-    <div class="login-card">
-        <div class="login-card-accent" aria-hidden="true"></div>
-        <div class="login-body">
-            <div class="text-center">
-                <img src="{{ asset('images/RGB-DOLE-LOGO-WITH-BLACK-WORDMARK-PNG.png') }}"
-                     alt="Department of Labor and Employment"
-                     class="login-logo" width="569" height="600" decoding="async">
-                <h1 class="login-brand-title">TIMS-BARMM</h1>
-                <p class="login-brand-subtitle">Department of Labor and Employment</p>
-            </div>
+    <div class="login-container">
+        <div class="login-overlay">
+            <img src="{{ asset('images/RGB-DOLE-LOGO-WITH-BLACK-WORDMARK-PNG.png') }}"
+                 alt="Department of Labor and Employment"
+                 class="login-overlay-logo" width="569" height="600" decoding="async">
+            <h1>TIMS-BARMM</h1>
+            <p>TUPAD INFORMATION MANAGEMENT SYSTEM OF BARMM.</p>
+            <div class="login-overlay-note">DOLE 12 - South Cotabato</div>
+        </div>
 
-            <div class="login-divider" aria-hidden="true"></div>
+        <div class="login-form-panel">
+            <h2>Welcome Back</h2>
+            <p class="login-form-subtitle">Sign in to continue to TIMS-BARMM.</p>
 
-            <h2 class="login-heading">Welcome Back</h2>
-            <p class="login-subheading">Sign in to continue to TIMS-BARMM.</p>
-
-            <form method="POST" action="{{ route('login.attempt') }}" class="mt-4" id="loginForm">
+            <form method="POST" action="{{ route('login.attempt') }}" id="loginForm">
                 @csrf
 
                 @if ($errors->any())
@@ -299,36 +329,24 @@
                     </div>
                 @endif
 
-                <div class="mb-3">
-                    <label for="username" class="login-form-label">Username</label>
+                <div class="login-field">
+                    <label for="username">Username</label>
                     <div class="login-input-wrap">
-                        <span class="login-input-icon" aria-hidden="true">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/>
-                            </svg>
-                        </span>
                         <input type="text" name="username" id="username" value="{{ old('username') }}"
-                               class="form-control login-input @error('username') is-invalid @enderror"
-                               autocomplete="username" placeholder="Enter your username" required autofocus>
+                               class="login-input form-control @error('username') is-invalid @enderror"
+                               autocomplete="username" placeholder="Username" required autofocus>
                     </div>
                     @error('username')
                         <span class="login-field-error">{{ $message }}</span>
                     @enderror
                 </div>
 
-                <div class="mb-3">
-                    <label for="password" class="login-form-label">Password</label>
+                <div class="login-field">
+                    <label for="password">Password</label>
                     <div class="login-input-wrap login-password-wrap">
-                        <span class="login-input-icon" aria-hidden="true">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                            </svg>
-                        </span>
                         <input type="password" name="password" id="password"
-                               class="form-control login-input @error('password') is-invalid @enderror"
-                               autocomplete="current-password" placeholder="Enter your password" required>
+                               class="login-input form-control @error('password') is-invalid @enderror"
+                               autocomplete="current-password" placeholder="Password" required>
                         <button type="button" class="login-password-toggle" id="passwordToggle"
                                 aria-label="Show password" aria-pressed="false" aria-controls="password"
                                 title="Show password">
@@ -349,7 +367,7 @@
                     @enderror
                 </div>
 
-                <div class="login-remember mb-3">
+                <div class="login-remember">
                     <input class="form-check-input" type="checkbox" name="remember" id="remember" value="1"
                            @checked(old('remember'))>
                     <label class="form-check-label" for="remember">Remember me</label>

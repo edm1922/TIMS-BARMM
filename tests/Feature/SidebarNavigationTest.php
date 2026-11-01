@@ -129,14 +129,14 @@ class SidebarNavigationTest extends TestCase
         $response->assertDontSee('Encoders');
     }
 
-    public function test_the_logout_form_is_available_in_the_sidebar(): void
+    public function test_the_logout_form_is_available_in_the_topbar(): void
     {
         $admin = $this->admin();
 
         $this->actingAs($admin)->get('/dashboard')
             ->assertOk()
             ->assertSee(route('logout'))
-            ->assertSee('Log out');
+            ->assertSee('Log Out');
     }
 
     public function test_the_mobile_drawer_toggle_is_present(): void
@@ -153,7 +153,7 @@ class SidebarNavigationTest extends TestCase
     {
         $this->get('/login')
             ->assertOk()
-            ->assertDontSee('app-sidebar', false);
+            ->assertDontSee('id="appSidebar"', false);
     }
 
     public function test_the_sidebar_exposes_collapse_avatar_theme_and_active_route_controls(): void
@@ -162,14 +162,17 @@ class SidebarNavigationTest extends TestCase
 
         $this->actingAs($admin)->get('/dashboard')
             ->assertOk()
+            ->assertSee('gips-topbar', false)
+            ->assertSee('TUPAD INFORMATION MANAGEMENT SYSTEM OF BARMM')
+            ->assertSee('gips-user-trigger', false)
+            ->assertSee('gips-avatar', false)
             ->assertSee('id="appSidebar"', false)
-            ->assertSee('id="sidebarToggle"', false)
+            ->assertSee('id="sidebarMenuToggle"', false)
             ->assertSee('aria-controls="appSidebar"', false)
-            ->assertSee('app-sidebar-edge-toggle', false)
-            ->assertSee('app-sidebar-avatar', false)
-            ->assertSee('app-sidebar-user-copy', false)
-            ->assertSee('app-sidebar-brand-subtitle', false)
-            ->assertSee('DOLE 12')
+            ->assertSee('app-sidebar-profile', false)
+            ->assertSee('app-sidebar-profile-avatar', false)
+            ->assertSee('app-sidebar-profile-name', false)
+            ->assertSee('app-sidebar-profile-role', false)
             ->assertSee('tims-sidebar')
             ->assertSee('data-theme-toggle', false)
             ->assertSee('nav-link active', false)
@@ -187,6 +190,6 @@ class SidebarNavigationTest extends TestCase
             ->assertSee('favicon-32x32.png', false)
             ->assertSee('favicon-16x16.png', false)
             ->assertSee('apple-touch-icon.png', false)
-            ->assertSee('<meta name="theme-color" content="#172337">', false);
+            ->assertSee('<meta name="theme-color" content="#2c3340">', false);
     }
 }

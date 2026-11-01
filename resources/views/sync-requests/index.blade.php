@@ -9,7 +9,7 @@
     <style>
         .sync-console .sync-filter-grid { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 14px 20px; }
         .sync-console .sync-filter-grid .sync-field { flex: 0 1 220px; }
-        .sync-console .sync-request-uuid { font-size: 11.5px; color: #334155; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 5px; padding: 2px 5px; }
+        .sync-console .sync-request-uuid { font-size: 11.5px; color: #334155; background: #f6f7fb; border: 1px solid #eef2f7; border-radius: 5px; padding: 2px 5px; }
     </style>
 
     <header class="sync-page-head">

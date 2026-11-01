@@ -68,8 +68,8 @@
         .sync-console .sync-time-cell--stale { color: var(--sync-warning); font-weight: 600; }
         .sync-console .sync-ops-table thead th:first-child,
         .sync-console .sync-ops-table tbody td:first-child { position: sticky; left: 0; background: #fff; z-index: 1; }
-        .sync-console .sync-ops-table thead th:first-child { background: #f8fafc; z-index: 2; }
-        .sync-console .sync-ops-table tbody tr:hover td:first-child { background: #f8fafc; }
+        .sync-console .sync-ops-table thead th:first-child { background: #f6f7fb; z-index: 2; }
+        .sync-console .sync-ops-table tbody tr:hover td:first-child { background: #f6f7fb; }
         @media (max-width: 991.98px) { .sync-console .sync-ops-table thead th:first-child, .sync-console .sync-ops-table tbody td:first-child { position: static; } }
     </style>
 

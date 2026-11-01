@@ -754,8 +754,8 @@
     .import-preview .imp-duplicates { border: 1px solid #f3d9b1; }
     .import-preview .imp-dup-summary { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .75rem; }
     .import-preview .imp-dup-chip {
-        font-size: .75rem; color: #475569; background: #f8fafc;
-        border: 1px solid #e2e8f0; border-radius: 999px; padding: .2rem .6rem;
+        font-size: .75rem; color: #475569; background: #f6f7fb;
+        border: 1px solid #e5e7eb; border-radius: 999px; padding: .2rem .6rem;
     }
     .import-preview .imp-dup-chip-warning { background: #fffbeb; border-color: #fde68a; }
     .import-preview .imp-dup-chip-danger { background: #fef2f2; border-color: #fecaca; }

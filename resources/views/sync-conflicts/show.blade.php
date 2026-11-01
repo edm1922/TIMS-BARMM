@@ -8,7 +8,7 @@
     <style>
         .sync-console .card { border: 1px solid var(--sync-border); border-radius: 12px; box-shadow: var(--sync-shadow); }
         .sync-console .card-header { background: #fff; border-bottom: 1px solid var(--sync-border); font-weight: 600; }
-        .sync-console .table thead th { background: #f8fafc; color: var(--sync-muted); font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--sync-border); white-space: nowrap; }
+        .sync-console .table thead th { background: #f6f7fb; color: var(--sync-muted); font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--sync-border); white-space: nowrap; }
         .sync-console .table tbody td { font-size: 12.5px; vertical-align: top; border-color: #f1f5f9; }
         .sync-console .form-label { font-size: 12.5px; font-weight: 600; }
     </style>

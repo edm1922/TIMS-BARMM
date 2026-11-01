@@ -15,7 +15,7 @@
 
     $categories = [
         ['filter' => 'Deletion approval', 'key' => 'deletions', 'title' => 'Deletion Approvals', 'icon' => $icons['deletions'], 'accent' => '#b91c1c', 'description' => 'Offline removal requests waiting for a decision.'],
-        ['filter' => 'Batch mapping', 'key' => 'mappings', 'title' => 'Batch Mappings', 'icon' => $icons['mappings'], 'accent' => '#2563eb', 'description' => 'Records whose batch is unknown to central.'],
+        ['filter' => 'Batch mapping', 'key' => 'mappings', 'title' => 'Batch Mappings', 'icon' => $icons['mappings'], 'accent' => '#1E429B', 'description' => 'Records whose batch is unknown to central.'],
         ['filter' => 'Duplicate candidate', 'key' => 'duplicates', 'title' => 'Duplicate Candidates', 'icon' => $icons['duplicates'], 'accent' => '#92400e', 'description' => 'Held because they match existing registrations.'],
         ['filter' => 'Field conflict', 'key' => 'conflicts', 'title' => 'Field Conflicts', 'icon' => $icons['conflicts'], 'accent' => '#7c3aed', 'description' => 'Overlapping edits needing a resolution.'],
         ['filter' => 'other', 'key' => 'other', 'title' => 'Other Holds', 'icon' => $icons['other'], 'accent' => '#64748b', 'description' => 'Any other records waiting on a decision.'],
@@ -31,7 +31,7 @@
         .review-inbox a.sync-stat { text-decoration: none; color: inherit; }
         .review-inbox a.sync-stat:hover { border-color: #cbd5e1; box-shadow: 0 4px 10px rgba(15, 23, 42, .07); }
         .review-inbox a.sync-stat:focus-visible { outline: 2px solid var(--sync-primary); outline-offset: 2px; }
-        .review-inbox a.sync-stat.is-active { border-color: var(--sync-primary); background: #f8fafc; }
+        .review-inbox a.sync-stat.is-active { border-color: var(--sync-primary); background: #f6f7fb; }
         .review-inbox .ri-category-icon {
             width: 34px;
             height: 34px;

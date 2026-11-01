@@ -172,7 +172,7 @@ class DashboardStatsTest extends TestCase
         $this->assertSame(2, array_sum($trend['months'][now()->year]));
 
         $response->assertSee('Beneficiary Registration Trend');
-        $response->assertSee('Monthly beneficiary profiling and registration overview.');
+        $response->assertSee('Monthly beneficiary registration activity for the selected year.');
         $response->assertSee('id="dashboard-year"', false);
         $response->assertSee('All years');
 
@@ -308,9 +308,9 @@ class DashboardStatsTest extends TestCase
 
         $response->assertOk()
             ->assertSee('Beneficiary Registration Trend')
-            ->assertSee('Monthly beneficiary profiling and registration overview.')
+            ->assertSee('Monthly beneficiary registration activity for the selected year.')
             ->assertSee('Year-Based Batch Distribution')
-            ->assertSee('Beneficiaries grouped by release batch for the selected year.')
+            ->assertSee('Beneficiary distribution across batches for the selected year.')
             ->assertSee('id="dashboard-year"', false)
             ->assertDontSee('id="trend-year"', false)
             ->assertDontSee('id="batch-year"', false)

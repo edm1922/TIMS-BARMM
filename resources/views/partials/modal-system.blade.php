@@ -8,13 +8,13 @@
 --}}
 <style>
     .modal {
-        --tims-modal-primary: #2563eb;
-        --tims-modal-primary-hover: #1d4ed8;
+        --tims-modal-primary: #1E429B;
+        --tims-modal-primary-hover: #16357C;
         --tims-modal-text: #0f172a;
         --tims-modal-muted: #64748b;
-        --tims-modal-border: #e2e8f0;
+        --tims-modal-border: #e5e7eb;
         --tims-modal-surface: #ffffff;
-        --tims-modal-canvas: #f8fafc;
+        --tims-modal-canvas: #f6f7fb;
         --tims-modal-success: #15803d;
         --tims-modal-warning: #d97706;
         --tims-modal-danger: #dc2626;
@@ -39,7 +39,7 @@
     }
 
     .modal-content {
-        border: 1px solid #e2e8f0;
+        border: 1px solid #e5e7eb;
         border-radius: 12px;
         box-shadow: 0 24px 48px -12px rgba(15, 23, 42, .25), 0 4px 12px rgba(15, 23, 42, .08);
         overflow: hidden;
@@ -52,7 +52,7 @@
         gap: 12px;
         padding: 16px 20px;
         background: #fff;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid #e5e7eb;
     }
 
     .modal-header .modal-title {
@@ -78,7 +78,7 @@
     }
 
     .modal-header .btn-close:focus-visible {
-        outline: 2px solid #2563eb;
+        outline: 2px solid #1E429B;
         outline-offset: 2px;
         box-shadow: none;
     }
@@ -92,7 +92,7 @@
         flex: 0 0 auto;
         border-radius: 9px;
         background: #eff6ff;
-        color: #2563eb;
+        color: #1E429B;
     }
 
     .tims-modal-icon--warning {
@@ -126,8 +126,8 @@
         justify-content: flex-end;
         gap: 8px;
         padding: 12px 20px;
-        background: #f8fafc;
-        border-top: 1px solid #e2e8f0;
+        background: #f6f7fb;
+        border-top: 1px solid #e5e7eb;
     }
 
     .modal-footer .btn {
@@ -178,8 +178,8 @@
 
     .modal .form-control:focus,
     .modal .form-select:focus {
-        border-color: #2563eb;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, .18);
+        border-color: #1E429B;
+        box-shadow: 0 0 0 3px rgba(30, 66, 155, .18);
     }
 
     .modal .form-control::placeholder {
@@ -237,13 +237,13 @@
     }
 
     .modal .form-check-input:checked {
-        background-color: #2563eb;
-        border-color: #2563eb;
+        background-color: #1E429B;
+        border-color: #1E429B;
     }
 
     .modal .form-check-input:focus {
-        border-color: #2563eb;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, .18);
+        border-color: #1E429B;
+        box-shadow: 0 0 0 3px rgba(30, 66, 155, .18);
     }
 
     /* Shared note / alert blocks ----------------------------------------- */
@@ -296,15 +296,15 @@
     }
 
     .modal .btn-primary {
-        background-color: #2563eb;
-        border-color: #2563eb;
+        background-color: #1E429B;
+        border-color: #1E429B;
         color: #fff;
     }
 
     .modal .btn-primary:hover,
     .modal .btn-primary:focus {
-        background-color: #1d4ed8;
-        border-color: #1d4ed8;
+        background-color: #16357C;
+        border-color: #16357C;
         color: #fff;
     }
 
@@ -334,7 +334,7 @@
     }
 
     .modal .btn:focus-visible {
-        outline: 2px solid #2563eb;
+        outline: 2px solid #1E429B;
         outline-offset: 2px;
         box-shadow: none;
     }

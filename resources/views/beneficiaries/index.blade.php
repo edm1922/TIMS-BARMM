@@ -93,7 +93,7 @@
         .sync-console .report-status .form-check-input { margin-top: 0; }
         .sync-console .report-status .form-check:has(input:checked) { border-color: var(--sync-primary); background: #eff6ff; }
         .sync-console .report-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-        .sync-console .report-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+        .sync-console .report-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: #f1f5f9; color: #475569; border: 1px solid #e5e7eb; }
         .sync-console .report-id { display: block; max-width: 26ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
         .sync-console .report-name { font-weight: 600; font-size: 13px; color: var(--sync-primary); text-decoration: none; }
         .sync-console .report-name:hover { text-decoration: underline; }

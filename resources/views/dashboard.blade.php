@@ -136,23 +136,15 @@
                 <div class="panel-card-header flex-wrap gap-2">
                     <div>
                         <h2 class="panel-card-title h6 mb-0">Beneficiary Registration Trend</h2>
-                        <div class="panel-card-subtitle">Monthly beneficiary profiling and registration overview.</div>
+                        <div class="panel-card-subtitle">Monthly beneficiary registration activity for the selected year.</div>
                     </div>
                 </div>
                 <div class="panel-card-body">
                     @php
                         $trendYear = $registrationTrend['current'];
                         $trendMonths = $registrationTrend['months'][$trendYear] ?? [];
-                        $trendTotal = array_sum($trendMonths);
                         $trendMax = max(1, $trendMonths === [] ? 0 : max($trendMonths));
-                        $trendMid = (int) ceil($trendMax / 2);
-                        $monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                        $monthFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
                     @endphp
-                    <div class="trend-summary">
-                        <div class="trend-summary-value" data-trend-total>{{ number_format($trendTotal) }}</div>
-                        <div class="trend-summary-label" data-trend-label>beneficiaries registered in {{ $trendYear }}</div>
-                    </div>
                     <div data-trend-chart>
                         <div class="chart-canvas-wrap">
                             <canvas id="registrationTrendChart" role="img"
@@ -177,24 +169,17 @@
                 <div class="panel-card-header flex-wrap gap-2">
                     <div>
                         <h2 class="panel-card-title h6 mb-0">Year-Based Batch Distribution</h2>
-                        <div class="panel-card-subtitle">Beneficiaries grouped by release batch for the selected year.</div>
+                        <div class="panel-card-subtitle">Beneficiary distribution across batches for the selected year.</div>
                     </div>
+                    <span class="sync-pill sync-pill--neutral" data-batch-count>
+                        {{ number_format($batchGroup['batch_count'] ?? 0) }} {{ Str::plural('batch', $batchGroup['batch_count'] ?? 0) }}
+                    </span>
                 </div>
                 <div class="panel-card-body">
                     @php
                         $batchYear = $batchYearData['default'];
                         $batchGroup = $batchYear !== null ? ($batchYearData['by_year'][(string) $batchYear] ?? null) : null;
                     @endphp
-                    <div class="trend-summary">
-                        <div class="trend-summary-value" data-batch-total>{{ number_format($batchGroup['total'] ?? 0) }}</div>
-                        <div class="trend-summary-label" data-batch-label>
-                            @if ($batchYear !== null)
-                                beneficiaries in {{ $batchYear }} batches
-                            @else
-                                no batches recorded yet
-                            @endif
-                        </div>
-                    </div>
                     <div class="batch-chart-wrap">
                         <canvas id="batchDistributionChart" role="img"
                                 aria-label="Beneficiary batch distribution for the selected year"></canvas>
@@ -575,7 +560,7 @@
     .dashboard-shell .cohort-icon {
         width: 34px; height: 34px; border-radius: 8px;
         display: inline-flex; align-items: center; justify-content: center;
-        background: #eff6ff; color: #2563eb;
+        background: #eff6ff; color: #1E429B;
     }
     .dashboard-shell .cohort-icon-neutral { background: #f1f5f9; color: #64748b; }
     .dashboard-shell .cohort-count { font-size: 1.8rem; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
@@ -616,7 +601,7 @@
     }
     .dashboard-shell a.age-bar-link:hover { background: #f1f5f9; }
     .dashboard-shell .age-bar-track { height: 8px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
-    .dashboard-shell .age-bar-fill { display: block; height: 100%; border-radius: 999px; background: #2563eb; }
+    .dashboard-shell .age-bar-fill { display: block; height: 100%; border-radius: 999px; background: #1E429B; }
     .dashboard-shell .age-bar-count { font-weight: 600; text-align: right; color: #0f172a; }
     .dashboard-shell .age-bar-percent { text-align: right; color: #64748b; }
 
@@ -669,10 +654,10 @@
         display: block;
         width: 100%;
         border-radius: .35rem .35rem 0 0;
-        background: #2563eb;
+        background: #1E429B;
         transition: background-color .15s ease;
     }
-    .dashboard-shell .year-bar:hover .year-bar-fill { background: #1d4ed8; }
+    .dashboard-shell .year-bar:hover .year-bar-fill { background: #16357C; }
     .dashboard-shell .year-bar:focus-visible .year-bar-fill { outline: 2px solid #0d6efd; outline-offset: 2px; }
     .dashboard-shell .year-labels {
         display: flex;
@@ -750,17 +735,17 @@
         max-width: none; min-width: 0; font-size: .66rem; letter-spacing: -.01em;
     }
     .dashboard-shell .year-bars-months .year-bar-value { font-size: .62rem; }
-    .dashboard-shell .year-bar-fill.is-zero { background: #e2e8f0; min-height: 2px; }
+    .dashboard-shell .year-bar-fill.is-zero { background: #e5e7eb; min-height: 2px; }
 
-    .dashboard-shell .chart-canvas-wrap { position: relative; height: 280px; }
-    .dashboard-shell .batch-chart-wrap { position: relative; height: 300px; }
+    .dashboard-shell .chart-canvas-wrap,
+    .dashboard-shell .batch-chart-wrap { position: relative; height: 280px; }
     .dashboard-shell .batch-chart-empty {
         position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
         color: #64748b; font-size: .85rem; text-align: center; padding: 1rem;
     }
     @media (max-width: 767.98px) {
-        .dashboard-shell .chart-canvas-wrap { height: 230px; }
-        .dashboard-shell .batch-chart-wrap { height: 260px; }
+        .dashboard-shell .chart-canvas-wrap,
+        .dashboard-shell .batch-chart-wrap { height: 240px; }
     }
 </style>
 
@@ -786,8 +771,7 @@
     }
 
     var select = document.getElementById('dashboard-year');
-    var totalEl = card.querySelector('[data-batch-total]');
-    var labelEl = card.querySelector('[data-batch-label]');
+    var countEl = card.querySelector('[data-batch-count]');
     var footnote = card.querySelector('[data-batch-footnote]');
     var emptyEl = card.querySelector('[data-batch-empty]');
     var beneficiariesUrl = '{{ route('beneficiaries.index') }}';
@@ -830,7 +814,7 @@
                     labels: rows.map(function (row) { return row.name; }),
                     datasets: [{
                         data: rows.map(function (row) { return Number(row.count || 0); }),
-                        backgroundColor: rows.map(function (row) { return row.color || '#2563eb'; }),
+                        backgroundColor: rows.map(function (row) { return row.color || '#1E429B'; }),
                         borderWidth: 2,
                         borderColor: isDark() ? '#111c2e' : '#ffffff'
                     }]
@@ -876,10 +860,10 @@
             });
         }
 
-        totalEl.textContent = fmt(group ? group.total : 0);
-        labelEl.textContent = key === 'all'
-            ? 'beneficiaries across all years'
-            : 'beneficiaries in ' + key + ' batches';
+        if (countEl) {
+            var batchCount = group ? group.batch_count : 0;
+            countEl.textContent = fmt(batchCount) + ' ' + (batchCount === 1 ? 'batch' : 'batches');
+        }
 
         var fallback = card.querySelector('[data-batch-fallback]');
         if (fallback) {
@@ -946,8 +930,7 @@
     }
 
     var select = document.getElementById('dashboard-year');
-    var totalEl = card.querySelector('[data-trend-total]');
-    var labelEl = card.querySelector('[data-trend-label]');
+
     var linkEl = card.querySelector('[data-trend-link]');
     var beneficiariesUrl = '{{ route('beneficiaries.index') }}';
     var monthShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -1046,8 +1029,6 @@
         var total = counts.reduce(function (sum, value) { return sum + value; }, 0);
 
         draw(monthShort, counts, counts.map(function () { return null; }), tooltips);
-        totalEl.textContent = fmt(total);
-        labelEl.textContent = 'beneficiaries registered in ' + year;
 
         if (linkEl) {
             linkEl.hidden = false;
@@ -1066,8 +1047,6 @@
         });
 
         draw(labels, counts, links, tooltips);
-        totalEl.textContent = fmt(data.all_total);
-        labelEl.textContent = 'beneficiaries registered across all years';
 
         if (linkEl) {
             linkEl.hidden = true;

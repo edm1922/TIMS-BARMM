@@ -53,7 +53,7 @@
         .sync-console .user-table-actions { white-space: nowrap; }
         .sync-console .user-table-actions .sync-btn { min-height: 32px; padding: 0 11px; font-size: 12.5px; }
         .sync-console .user-filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-        .sync-console .user-filter-chip { display: inline-flex; gap: 4px; font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+        .sync-console .user-filter-chip { display: inline-flex; gap: 4px; font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: #f1f5f9; color: #475569; border: 1px solid #e5e7eb; }
     </style>
 
     <header class="sync-page-head">

@@ -11,7 +11,7 @@
         .sync-console.reg-page .reg-breadcrumb a { color: var(--sync-muted); text-decoration: none; }
         .sync-console.reg-page .reg-breadcrumb a:hover { color: var(--sync-primary); }
         .sync-console.reg-page .reg-breadcrumb span { color: #cbd5e1; }
-        .sync-console.reg-page .reg-batch-pill { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 3px 10px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-size: 12px; font-weight: 600; }
+        .sync-console.reg-page .reg-batch-pill { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 3px 10px; border-radius: 999px; background: #eff6ff; color: #16357C; border: 1px solid #bfdbfe; font-size: 12px; font-weight: 600; }
 
         .sync-console.reg-page .reg-info-banner { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 18px; padding: 12px 14px; border: 1px solid #bae6fd; border-radius: 10px; background: #f0f9ff; color: #0c4a6e; font-size: 12.5px; line-height: 1.5; }
         .sync-console.reg-page .reg-info-banner svg { flex: 0 0 auto; margin-top: 1px; }
@@ -27,7 +27,7 @@
         .sync-console.reg-page .reg-nav-link:hover { background: #f1f5f9; color: var(--sync-text); }
         .sync-console.reg-page .reg-nav-link .reg-nav-dot { width: 7px; height: 7px; border-radius: 50%; background: #cbd5e1; flex: 0 0 auto; }
         .sync-console.reg-page .reg-nav-link.is-complete .reg-nav-dot { background: var(--sync-success); }
-        .sync-console.reg-page .reg-nav-link.is-active { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+        .sync-console.reg-page .reg-nav-link.is-active { background: #eff6ff; color: #16357C; font-weight: 600; }
         .sync-console.reg-page .reg-progress { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--sync-border); font-size: 11.5px; color: var(--sync-muted); line-height: 1.45; }
         .sync-console.reg-page .reg-progress strong { color: var(--sync-text); }
 
@@ -55,7 +55,7 @@
         .sync-console.reg-page .form-control:focus,
         .sync-console.reg-page .form-select:focus {
             border-color: var(--sync-primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, .18);
+            box-shadow: 0 0 0 3px rgba(30, 66, 155, .18);
         }
         .sync-console.reg-page .form-control.is-invalid,
         .sync-console.reg-page .form-select.is-invalid { border-color: var(--sync-danger); }
@@ -65,7 +65,7 @@
         .sync-console.reg-page .invalid-feedback { display: none; margin-top: 4px; font-size: 12px; color: var(--sync-danger); }
         .sync-console.reg-page .is-invalid ~ .invalid-feedback,
         .sync-console.reg-page .is-invalid + .invalid-feedback { display: block; }
-        .sync-console.reg-page .reg-computed { background: #f8fafc; color: #334155; font-weight: 600; }
+        .sync-console.reg-page .reg-computed { background: #f6f7fb; color: #334155; font-weight: 600; }
 
         .sync-console.reg-page .reg-actions-bar {
             position: sticky;
