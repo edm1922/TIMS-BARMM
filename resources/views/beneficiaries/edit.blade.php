@@ -23,7 +23,7 @@
     </div>
 @endif
 
-<form method="POST" action="{{ route('beneficiaries.update', $beneficiary) }}" id="beneficiaryForm">
+<form method="POST" action="{{ route('beneficiaries.update', $beneficiary) }}" id="beneficiaryForm" data-draft-user="{{ auth()->id() ?? 'anonymous' }}">
     @csrf
     @method('PUT')
     <div class="card mb-3">

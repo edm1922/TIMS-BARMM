@@ -18,6 +18,25 @@ document.addEventListener('DOMContentLoaded', function () {
     var verify = document.getElementById('duplicateCheckVerify');
     var mainForm = document.getElementById('beneficiaryForm');
     var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    var verificationPassed = false;
+
+    // The registration gate must not be dismissible by clicking the backdrop,
+    // pressing Escape, or any programmatic hide before verification succeeds.
+    modalEl.addEventListener('hide.bs.modal', function (event) {
+        if (!verificationPassed) {
+            event.preventDefault();
+        }
+    });
+
+    if (mainForm) {
+        mainForm.addEventListener('submit', function (event) {
+            var flag = mainForm.querySelector('#duplicateCheckDone');
+            if (!flag || flag.value !== '1') {
+                event.preventDefault();
+                modal.show();
+            }
+        });
+    }
 
     function field(name) {
         return form.querySelector('[name="' + name + '"]');
@@ -58,6 +77,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         });
+
+        // Trigger the computed age calculation after programmatic birthdate update
+        var birthdateInput = mainForm.querySelector('[data-birthdate]');
+        var ageDisplay = mainForm.querySelector('[data-age-display]');
+        if (birthdateInput && ageDisplay && birthdateInput.value) {
+            // Dispatch input event to trigger age calculation
+            birthdateInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
     }
 
     function reset() {
@@ -133,6 +160,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 carry();
                 unlockRegistration();
+                verificationPassed = true;
                 modal.hide();
             })
             .catch(function () {
@@ -152,10 +180,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // server-side validation error (the gate must be re-run).
     modal.show();
 
-    var cancelButton = modalEl.querySelector('.modal-footer .btn-outline-secondary');
-    if (cancelButton && mainForm) {
+    var cancelButton = document.getElementById('duplicateCheckCancel');
+    if (cancelButton) {
         cancelButton.addEventListener('click', function () {
-            window.location.href = mainForm.querySelector('a.btn-outline-secondary').href || '/beneficiaries';
+            var backLink = mainForm ? mainForm.querySelector('a.btn-outline-secondary') : null;
+            window.location.href = backLink ? backLink.href : '/beneficiaries';
         });
     }
 });

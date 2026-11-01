@@ -36,7 +36,11 @@ class AuthenticationTest extends TestCase
         $this->assertAuthenticatedAs($admin);
         $this->assertDatabaseHas('audit_logs', ['action' => 'auth.login']);
 
-        $this->get('/dashboard')->assertOk();
+        $this->get('/dashboard')
+            ->assertOk()
+            ->assertSee('app-sidebar-brand-logo', false)
+            ->assertSee('Department of Labor and Employment')
+            ->assertSee('TIMS-BARMM');
     }
 
     public function test_valid_admin_can_login_with_email_fallback(): void
@@ -62,6 +66,9 @@ class AuthenticationTest extends TestCase
     {
         $this->get(route('login'))
             ->assertOk()
+            ->assertSee('TIMS-BARMM')
+            ->assertSee('RGB-DOLE-LOGO-WITH-BLACK-WORDMARK-PNG.png', false)
+            ->assertDontSee('TUPAD Beneficiary LOB System')
             ->assertSee('Username')
             ->assertSee('name="username"', false)
             ->assertDontSee('name="email"', false);

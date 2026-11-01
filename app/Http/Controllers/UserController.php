@@ -2,18 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\OfflineServerEncoder;
 use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 class UserController extends Controller
 {
     public const ROLES = [
         User::ROLE_ADMIN => 'Administrator',
+        User::ROLE_ENCODER => 'Encoder',
+        User::ROLE_STAFF => 'Staff',
+    ];
+
+    public const ROLE_LABELS = [
+        User::ROLE_ADMIN => 'Administrator',
+        User::ROLE_MANAGER => 'Manager',
         User::ROLE_ENCODER => 'Encoder',
         User::ROLE_STAFF => 'Staff',
     ];
@@ -49,6 +56,13 @@ class UserController extends Controller
 
         $users = $query->paginate(20)->withQueryString();
 
+        $offlineAccounts = OfflineServerEncoder::query()
+            ->with('server')
+            ->orderByDesc('reported_at')
+            ->orderBy('username')
+            ->limit(100)
+            ->get();
+
         $roleCounts = [
             'total' => User::count(),
             'admin' => User::where('role', User::ROLE_ADMIN)->count(),
@@ -59,48 +73,11 @@ class UserController extends Controller
 
         return view('users.index', [
             'users' => $users,
+            'offlineAccounts' => $offlineAccounts,
             'filters' => $filters,
             'roles' => self::ROLES,
             'roleCounts' => $roleCounts,
         ]);
-    }
-
-    public function create(): View
-    {
-        return view('users.create', [
-            'roles' => self::ROLES,
-        ]);
-    }
-
-    public function store(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'username' => ['required', 'string', 'max:50', 'alpha_dash', 'unique:users,username'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role' => ['required', Rule::in(array_keys(self::ROLES))],
-            'is_active' => ['nullable', 'boolean'],
-        ]);
-
-        $user = User::create([
-            'name' => trim($validated['name']),
-            'username' => strtolower(trim($validated['username'])),
-            'email' => strtolower(trim($validated['email'])),
-            'password' => $validated['password'],
-            'role' => $validated['role'],
-            'is_active' => $request->boolean('is_active', true),
-        ]);
-
-        AuditLogger::log('user.created', 'user', $user->id, [
-            'username' => $user->username,
-            'role' => $user->role,
-            'email' => $user->email,
-        ]);
-
-        return redirect()
-            ->route('users.index')
-            ->with('success', "User '{$user->username}' with role '{$user->role}' created successfully.");
     }
 
     public function edit(User $user): View

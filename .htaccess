@@ -1,0 +1,22 @@
+﻿<Files ".env">
+    Require all denied
+</Files>
+<FilesMatch "^\.git">
+    Require all denied
+</FilesMatch>
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(\.env.*|\.git.*|composer\.(json|lock)|package\.json|phpunit\.xml|artisan|README\.md|OFFLINE[^/]*\.md|TIMS-BARMM\.md)$ - [F,L]
+    RewriteRule ^(vendor|storage|database|tests|docs|config|resources|routes|app|bootstrap|node_modules)(/|$) - [F,L]
+    RewriteRule ^$ index.php [L]
+</IfModule>
+Options -Indexes
+# TIMS-BARMM access restriction
+<RequireAny>
+    Require ip 127.0.0.1
+    Require ip ::1
+    Require ip 192.168.1.0/24
+</RequireAny>
+
+
+

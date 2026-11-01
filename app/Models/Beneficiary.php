@@ -2,23 +2,35 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RecordsSyncChanges;
 use App\Services\AgeService;
 use App\Services\BeneficiaryIdGenerator;
 use App\Services\DuplicateDetector;
 use App\Support\BeneficiaryOptions;
 use App\Support\NameNormalizer;
+use App\Support\SyncIdentity;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use RuntimeException;
 
 class Beneficiary extends Model
 {
     use HasFactory;
+    use RecordsSyncChanges;
 
     protected $fillable = [
+        'global_uuid',
+        'origin_server_uuid',
+        'revision',
+        'server_revision',
+        'sync_status',
+        'conflict_status',
+        'last_operation_uuid',
         'beneficiary_code',
         'source_id_number',
         'source_row_no',
@@ -28,6 +40,7 @@ class Beneficiary extends Model
         'extension_name',
         'birthdate',
         'birthdate_raw',
+        'profiled_on',
         'barangay',
         'city_municipality',
         'province',
@@ -57,30 +70,86 @@ class Beneficiary extends Model
         'photo_path',
         'signature_path',
         'duplicate_status',
+        'duplicate_rule',
         'duplicate_note',
         'import_batch_id',
         'beneficiary_batch_id',
         'archived_at',
         'archive_reason',
         'notes',
+        'missing_fields',
     ];
+
+    /**
+     * Field keys that can be flagged as missing on a record.
+     *
+     * @var array<string, string>
+     */
+    public const MISSING_FIELD_LABELS = [
+        'source_id_no' => 'Government ID No.',
+        'birthdate' => 'Birthdate',
+        'sex' => 'Sex',
+        'civil_status' => 'Civil status',
+        'contact_no' => 'Contact No.',
+        'barangay' => 'Barangay',
+        'city_municipality' => 'City/Municipality',
+        'province' => 'Province',
+    ];
+
+    /**
+     * Human labels for the fields flagged as missing on this record.
+     *
+     * @return list<string>
+     */
+    public function missingFieldLabels(): array
+    {
+        $keys = array_filter(array_map('trim', explode(',', (string) $this->missing_fields)));
+
+        return array_values(array_map(
+            fn (string $key): string => self::MISSING_FIELD_LABELS[$key] ?? ucfirst(str_replace('_', ' ', $key)),
+            $keys,
+        ));
+    }
 
     protected function casts(): array
     {
         return [
             'birthdate' => 'date',
+            'profiled_on' => 'date',
             'archived_at' => 'datetime',
             'avg_monthly_income' => 'decimal:2',
             'age_source' => 'integer',
+            'revision' => 'integer',
+            'server_revision' => 'integer',
         ];
     }
 
     protected static function booted(): void
     {
         static::creating(function (Beneficiary $beneficiary): void {
+            $beneficiary->global_uuid ??= (string) Str::uuid();
+            $beneficiary->origin_server_uuid ??= SyncIdentity::originUuid();
+            $beneficiary->revision ??= 1;
+            $beneficiary->server_revision ??= 1;
+            $beneficiary->sync_status ??= 'synced';
+            $beneficiary->conflict_status ??= 'none';
+
             if (! $beneficiary->beneficiary_code) {
-                $beneficiary->beneficiary_code = app(BeneficiaryIdGenerator::class)
-                    ->generate($beneficiary->first_name, $beneficiary->middle_name, $beneficiary->last_name);
+                $generator = app(BeneficiaryIdGenerator::class);
+
+                // A batch may define its own starting ID series; the first
+                // beneficiary created in it uses that code, then it increments.
+                $seriesCode = $generator->generateForBatch(
+                    $beneficiary->beneficiary_batch_id !== null
+                        ? (int) $beneficiary->beneficiary_batch_id
+                        : null,
+                );
+
+                $beneficiary->beneficiary_code = $seriesCode ?? $generator->generate(
+                    (string) $beneficiary->first_name,
+                    $beneficiary->middle_name,
+                    (string) $beneficiary->last_name,
+                );
             }
 
             // Flag possible duplicates on every creation path (manual entry,
@@ -98,6 +167,7 @@ class Beneficiary extends Model
 
                 if ($candidates !== null) {
                     $beneficiary->duplicate_status = 'candidate';
+                    $beneficiary->duplicate_rule = $candidates['rule'];
                 }
             }
         });
@@ -113,7 +183,9 @@ class Beneficiary extends Model
 
     /**
      * Create a beneficiary, retrying safely on beneficiary_code collisions.
-     * The unique constraint remains the source of truth.
+     * The unique constraint on (source_id_no, origin_server_uuid) remains the
+     * source of truth — if a duplicate slips through the application check,
+     * the database will reject it and we surface a clear error.
      */
     public static function createWithCode(array $attributes, int $attempts = 5): static
     {
@@ -121,29 +193,60 @@ class Beneficiary extends Model
             try {
                 return static::create($attributes);
             } catch (QueryException $e) {
-                $isCodeCollision = (string) $e->getCode() === '23000'
-                    && str_contains(strtolower($e->getMessage()), 'beneficiary_code');
+                $code = (string) $e->getCode();
+                $msg = (string) $e->getMessage();
 
-                if (! $isCodeCollision || $attempt >= $attempts) {
+                // Duplicate key on (source_id_no, origin_server_uuid)
+                $isSourceIdDup = $code === '23000'
+                    && str_contains(strtolower($msg), 'source_id_no')
+                    && str_contains(strtolower($msg), 'origin_server_uuid');
+
+                // beneficiary_code collision (existing handling)
+                $isCodeCollision = $code === '23000'
+                    && str_contains(strtolower($msg), 'beneficiary_code');
+
+                if (! $isSourceIdDup && ! $isCodeCollision) {
                     throw $e;
                 }
 
+                if ($attempt >= $attempts) {
+                    // Re-throw as a more descriptive exception after exhausting retries
+                    throw new RuntimeException(
+                        'Could not create beneficiary: a record with the same government ID number '
+                        .'already exists on this server. Please use a different beneficiary or '
+                        .'contact the administrator.'
+                    );
+                }
+
+                // For source_id_no collisions, we cannot generate a new value —
+                // the database constraint is the source of truth. Abort.
+                if ($isSourceIdDup) {
+                    throw new RuntimeException(
+                        'A beneficiary with this government ID number is already registered '
+                        .'on this server. Duplicate registration is prevented at the database level.'
+                    );
+                }
+
+                // beneficiary_code collision — generate a new code and retry
                 $failed = $attributes['beneficiary_code'] ?? null;
                 $generator = app(BeneficiaryIdGenerator::class);
 
-                $next = $generator->generate(
-                    $attributes['first_name'] ?? '',
+                $batchId = isset($attributes['beneficiary_batch_id']) && $attributes['beneficiary_batch_id'] !== null
+                    ? (int) $attributes['beneficiary_batch_id']
+                    : null;
+                $next = $generator->generateForBatch($batchId) ?? $generator->generate(
+                    (string) ($attributes['first_name'] ?? ''),
                     $attributes['middle_name'] ?? null,
-                    $attributes['last_name'] ?? '',
+                    (string) ($attributes['last_name'] ?? ''),
                 );
 
-                // stale snapshot: the freshly computed candidate still collides,
-                // so widen the suffix range for this attempt
+                // Stale snapshot: the freshly computed candidate still collides,
+                // so widen the suffix range for this attempt.
                 if ($next === $failed) {
                     $next = $generator->generate(
-                        $attributes['first_name'] ?? '',
+                        (string) ($attributes['first_name'] ?? ''),
                         $attributes['middle_name'] ?? null,
-                        $attributes['last_name'] ?? '',
+                        (string) ($attributes['last_name'] ?? ''),
                         $attempt + 1,
                     );
                 }

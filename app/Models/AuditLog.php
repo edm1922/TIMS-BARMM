@@ -8,7 +8,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class AuditLog extends Model
 {
     protected $fillable = [
+        'event_uuid',
         'user_id',
+        'actor_uuid',
+        'actor_name',
+        'actor_username',
+        'actor_role',
+        'origin_server_uuid',
+        'occurred_at',
+        'synced_at',
         'action',
         'entity_type',
         'entity_id',
@@ -20,6 +28,8 @@ class AuditLog extends Model
     {
         return [
             'metadata' => 'array',
+            'occurred_at' => 'datetime',
+            'synced_at' => 'datetime',
         ];
     }
 

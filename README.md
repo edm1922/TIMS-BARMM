@@ -30,6 +30,16 @@ and Bootstrap 5 (vendored — no Node.js required).
   on A4 with crop-free margins; emergency-contact block left blank by design.
 - **Audit trail** — logins, beneficiary changes, import lifecycle, duplicate
   decisions, exports, and card printing; audit log readable by admins only.
+- **Offline installation lifecycle** — three admin sections: *Offline Installation*
+  (build the installation package, enroll the device, authorize it), *Offline Servers*
+  (authorization periods, scopes, reported health, encoder registry), and
+  *Conflict Resolution* (one workspace for local and central conflicts).
+  Administrators set the authorization period per installation; uploads are rejected
+  after it ends, while records, audit history, and the pending queue are preserved.
+- **Field encoders and attributable audit** — encoder accounts are managed on the
+  offline installation and reported to the central server as a read-only identity
+  registry (uuid, username, role, active). Audit records carry the actor identity and
+  the origin installation and synchronize to the central server with the next sync.
 
 ## Quick start (this machine)
 

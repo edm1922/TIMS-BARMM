@@ -221,8 +221,9 @@ class RowParser
 
         $text = trim((string) $value);
         $raw = mb_substr($text, 0, 32);
+        $normalized = preg_replace('/[\s\'’]+$/u', '', $text) ?? $text;
 
-        if (preg_match('/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?$/', $text, $m)
+        if (preg_match('/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?$/', $normalized, $m)
             && checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
             return [sprintf('%04d-%02d-%02d', $m[1], $m[2], $m[3]), $raw, null];
         }

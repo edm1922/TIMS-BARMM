@@ -7,8 +7,10 @@ use App\Models\BeneficiaryBatch;
 use App\Models\ImportBatch;
 use App\Services\AuditLogger;
 use App\Services\Export\CsvExporter;
+use App\Services\Import\DuplicateReviewService;
 use App\Services\Import\FieldMap;
 use App\Services\Import\ImportService;
+use App\Services\Import\InvalidOptionResolver;
 use App\Services\Import\WorkbookInspector;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -60,12 +62,19 @@ class ImportController extends Controller
         $request->validate([
             'workbook' => ['required', 'file', 'max:'.(self::MAX_BYTES / 1024)],
             'beneficiary_batch_id' => ['nullable', 'integer', 'exists:beneficiary_batches,id'],
+            'profiling_date' => ['nullable', 'date'],
         ], [
             'workbook.required' => 'Choose an .xlsx workbook to upload.',
             'workbook.file' => 'The upload must be a file.',
             'workbook.max' => 'The workbook exceeds the 10 MB limit.',
             'beneficiary_batch_id.exists' => 'The selected release batch does not exist.',
+            'profiling_date.date' => 'Enter a valid beneficiary profiling date.',
         ]);
+
+        // The profiling date is independent of the upload timestamp: it is the
+        // date the beneficiaries were profiled/registered and drives the
+        // dashboard's registration trend.
+        $profilingDate = $request->input('profiling_date') ?: now()->toDateString();
 
         $upload = $request->file('workbook');
         $original = $upload->getClientOriginalName();
@@ -131,6 +140,7 @@ class ImportController extends Controller
             'original_filename' => $original,
             'worksheet' => $info['sheet'],
             'header_row' => $info['header_row'],
+            'profiling_date' => $profilingDate,
             'status' => 'uploaded',
             'stored_path' => $relativePath,
             'mapping' => [
@@ -145,6 +155,7 @@ class ImportController extends Controller
             'original_filename' => $original,
             'worksheet' => $info['sheet'],
             'data_rows' => $dataRows,
+            'profiling_date' => $profilingDate,
         ]);
 
         return redirect()->route('imports.edit', $batch)
@@ -240,9 +251,48 @@ class ImportController extends Controller
             ->with('success', 'Dry-run complete: '.$importBatch->rows_read.' rows read. Nothing was written to the beneficiaries table.');
     }
 
-    public function show(Request $request, ImportBatch $importBatch): View
+    public function show(Request $request, ImportBatch $importBatch, InvalidOptionResolver $invalidOptions, DuplicateReviewService $duplicateReview): View
     {
         Gate::authorize('view', $importBatch);
+
+        $duplicates = $duplicateReview->duplicates($importBatch);
+        $duplicateSummary = $duplicateReview->summary($importBatch);
+
+        // Failed rows carry enough context to find the record and the row in
+        // the preview table: exact page, anchor, and the conflicting existing
+        // beneficiary when its government ID is known.
+        $allRows = $importBatch->rows()->orderBy('excel_row')->get(['id', 'excel_row', 'outcome', 'payload', 'apply_error']);
+
+        $failedRows = $allRows->whereNotNull('apply_error')->map(function ($row) use ($importBatch, $allRows): array {
+            $payload = $row->payload ?? [];
+            $govId = (string) ($payload['source_id_no'] ?? '');
+
+            $position = $allRows
+                ->where('outcome', $row->outcome)
+                ->values()
+                ->search(fn ($candidate): bool => $candidate->id === $row->id);
+
+            $existing = $govId === ''
+                ? null
+                : Beneficiary::query()->where('source_id_no', $govId)->first();
+
+            $isGovernmentIdConflict = $govId !== '' && $existing !== null;
+
+            return [
+                'row' => $row,
+                'name' => trim((string) ($payload['last_name'] ?? '').', '.($payload['first_name'] ?? '')),
+                'gov_id' => $govId,
+                'birthdate' => $payload['birthdate'] ?? null,
+                'page' => $position === false ? 1 : intdiv((int) $position, 50) + 1,
+                'anchor' => 'import-row-'.$row->id,
+                'existing' => $existing,
+                'view_duplicate_url' => $existing === null ? null : route('beneficiaries.show', $existing),
+                'edit_url' => $existing === null ? null : route('beneficiaries.edit', $existing),
+                'bypass_url' => $isGovernmentIdConflict && ! $row->applied
+                    ? route('imports.rows.bypass', ['importBatch' => $importBatch, 'importRow' => $row->id])
+                    : null,
+            ];
+        })->values();
 
         $outcomeFilter = $request->query('outcome', '');
         $rows = $importBatch->rows()
@@ -282,6 +332,31 @@ class ImportController extends Controller
             }
         }
 
+        // Recurring validation warnings across the whole file (read-only
+        // aggregation for the preview's warning summary; counts unchanged).
+        $warningGroups = $importBatch->rows()
+            ->whereNotNull('messages')
+            ->get(['messages'])
+            ->flatMap(fn ($row) => collect($row->messages ?? [])
+                ->map(fn ($message) => [
+                    'severity' => (string) ($message['severity'] ?? 'warning'),
+                    'text' => (string) ($message['text'] ?? ''),
+                ]))
+            ->filter(fn ($message) => $message['text'] !== '')
+            ->groupBy(fn ($message) => $message['severity'].'|'.$message['text'])
+            ->map(function ($group): array {
+                $first = $group->first();
+
+                return [
+                    'severity' => $first['severity'],
+                    'text' => $first['text'],
+                    'count' => $group->count(),
+                ];
+            })
+            ->sortByDesc('count')
+            ->take(6)
+            ->values();
+
         return view('imports.show', [
             'batch' => $importBatch,
             'rows' => $rows,
@@ -289,6 +364,11 @@ class ImportController extends Controller
             'outcomeFilter' => $outcomeFilter,
             'codeLookup' => $codeLookup,
             'missingFromImport' => $missingFromImport,
+            'warningGroups' => $warningGroups,
+            'invalidOptions' => $invalidOptions->unresolved($importBatch),
+            'duplicates' => $duplicates,
+            'duplicateSummary' => $duplicateSummary,
+            'failedRows' => $failedRows,
         ]);
     }
 
@@ -324,9 +404,136 @@ class ImportController extends Controller
             Storage::disk('local')->delete($importBatch->stored_path);
         }
 
+        $failedRows = (int) ($result['failed_rows'] ?? 0);
+
         return redirect()->route('imports.show', $importBatch)
             ->with('success', 'Applied: '.$result['inserted'].' inserted, '.$result['updated'].' updated, '
-                .$result['skipped'].' skipped, '.$result['flagged'].' flagged as duplicate candidates.');
+                .$result['skipped'].' skipped, '.$result['flagged'].' flagged as duplicate candidates.'
+                .($failedRows > 0 ? ' '.$failedRows.' row(s) could not be applied and were left for follow-up.' : ''));
+    }
+
+    /**
+     * Resolve an unrecognized imported option value: add it as a new standard
+     * option or replace it with an existing option for that field.
+     */
+    public function resolveInvalidOption(Request $request, ImportBatch $importBatch, InvalidOptionResolver $invalidOptions): RedirectResponse
+    {
+        Gate::authorize('apply', $importBatch);
+
+        if (! in_array($importBatch->status, ['previewed', 'applied'], true)) {
+            return redirect()->route('imports.show', $importBatch)
+                ->with('error', 'Options can only be resolved for batches that completed a dry-run.');
+        }
+
+        $data = $request->validate([
+            'action' => ['required', 'in:add,replace'],
+            'field' => ['required', 'string'],
+            'value' => ['required', 'string', 'max:150'],
+            'replacement' => ['nullable', 'string', 'max:150'],
+        ], [
+            'action.in' => 'Choose whether to add the value as a new option or replace it.',
+            'value.required' => 'The unrecognized value is missing.',
+        ]);
+
+        $result = $data['action'] === 'add'
+            ? $invalidOptions->addOption($importBatch, $data['field'], $data['value'], $request->user()?->id)
+            : ((string) ($data['replacement'] ?? '') === ''
+                ? ['ok' => false, 'message' => 'Choose an existing option to replace the value with.']
+                : $invalidOptions->replaceOption($importBatch, $data['field'], $data['value'], (string) $data['replacement'], $request->user()?->id));
+
+        return redirect()->route('imports.show', $importBatch)
+            ->with($result['ok'] ? 'success' : 'error', $result['message']);
+    }
+
+    /**
+     * Bypass a failed government-ID conflict: leave the conflicted field blank,
+     * import the row, and flag the created beneficiary as missing that field.
+     */
+    public function bypassRow(Request $request, ImportBatch $importBatch, int $importRow, \App\Services\Import\ImportService $imports): RedirectResponse
+    {
+        Gate::authorize('apply', $importBatch);
+
+        $row = $importBatch->rows()->whereKey($importRow)->first();
+
+        if ($row === null) {
+            return redirect()->route('imports.show', $importBatch)
+                ->with('error', 'That row does not belong to this import batch.');
+        }
+
+        if ($row->applied) {
+            return redirect()->route('imports.show', $importBatch)
+                ->with('error', 'That row has already been applied.');
+        }
+
+        $payload = $row->payload ?? [];
+        $blankFields = [];
+
+        if (trim((string) ($payload['source_id_no'] ?? '')) !== '') {
+            $payload['source_id_no'] = null;
+            $blankFields[] = 'source_id_no';
+        }
+
+        if ($blankFields === []) {
+            return redirect()->route('imports.show', $importBatch)
+                ->with('error', 'There is no conflicting value to bypass on this row.');
+        }
+
+        try {
+            $beneficiary = $imports->insertRowAsNew($importBatch, $row, $payload);
+        } catch (\Throwable $e) {
+            return redirect()->route('imports.show', $importBatch)
+                ->with('error', 'The row could not be imported after bypassing the value: '.mb_substr($e->getMessage(), 0, 200));
+        }
+
+        $beneficiary->forceFill([
+            'missing_fields' => implode(',', $blankFields),
+        ])->save();
+
+        $row->forceFill([
+            'payload' => $payload,
+            'applied' => true,
+            'operator_decision' => 'insert',
+            'apply_error' => null,
+            'review_action' => 'bypass_blank',
+            'reviewed_by' => $request->user()?->id,
+            'reviewed_at' => now(),
+        ])->save();
+
+        AuditLogger::log('import.row.bypass_blank', 'import_batch', $importBatch->id, [
+            'excel_row' => $row->excel_row,
+            'blank_fields' => $blankFields,
+            'beneficiary_id' => $beneficiary->id,
+        ]);
+
+        return redirect()->route('imports.show', $importBatch)
+            ->with('success', 'Excel row '.$row->excel_row.' imported with the government ID left blank; the record is flagged as missing a field.');
+    }
+
+    /**
+     * Record the administrator's decision for one duplicate row.
+     */
+    public function resolveDuplicate(Request $request, ImportBatch $importBatch, int $importRow, DuplicateReviewService $duplicateReview): RedirectResponse
+    {
+        Gate::authorize('apply', $importBatch);
+
+        $row = $importBatch->rows()->whereKey($importRow)->first();
+
+        if ($row === null) {
+            return redirect()->route('imports.show', $importBatch)
+                ->with('error', 'That row does not belong to this import batch.');
+        }
+
+        $data = $request->validate([
+            'action' => ['required', 'in:skip,update_existing,approve_new'],
+        ], [
+            'action.in' => 'Choose how to handle this duplicate.',
+        ]);
+
+        $result = $duplicateReview->decide($importBatch, $row, $data['action'], $request->user());
+
+        return redirect()->route('imports.show', $importBatch)
+            ->with($result['ok'] ? 'success' : 'error', $result['message'])
+            ->withFragment('duplicates');
     }
 
     public function cancel(ImportBatch $importBatch): RedirectResponse

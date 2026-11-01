@@ -34,12 +34,19 @@ Everything lives behind the **left sidebar**:
   No., barangay, occupation), age status, sex, civil status, duplicate status,
   release batch, and active/archived/all.
 - **New beneficiary** opens a blank form; the generated ID is assigned on save.
+  On an offline installation the generated ID carries a short marker of that
+  device (e.g. `DOLE XII-SCFO-BARMM-102026-00001-A1B2`), so a code issued on a
+  field device can never be the same code the Central Server issued to another
+  person. The Central Server keeps the plain format.
 - **Age status** is always recalculated from the birthdate: *Adult* (18+),
   *Underage* (below 18), *Needs Review* (missing/invalid/future date). The Excel
   "Age" column is stored for traceability but never used for decisions.
-- **Duplicate candidate** badges appear when a new/edited record matches an
-  existing one by source ID number or by name + birthdate. Nothing is merged
-  automatically; an admin resolves the flag on the record page.
+- **Duplicate** column badges show *why* a record was flagged, not just that it
+  was: "Same DOLE ID NUMBER", "Same government ID No.", "Same name and
+  birthdate", or "Same name only (weak match)". Nothing is merged automatically;
+  an admin resolves the flag on the record page. Once resolved, the badge turns
+  red **Confirmed duplicate** (a real duplicate) or green **Cleared duplication**
+  (not a duplicate after review).
 - **Archive** hides a record from active lists without deleting it. Archived
   records remain printable and exportable when "Archived" or "All" is selected.
 
@@ -76,8 +83,11 @@ Other things you can do on the batch management view:
 - **Remove** — **Remove** takes a record out of the batch. The beneficiary
   record itself is never deleted; it simply becomes *Unassigned*.
 - **Settings** — rename the batch, edit its description, or mark it *closed*
-  (still usable, but flagged in the lists). **Delete batch** removes the batch;
-  it can only be deleted while it is empty — remove its records first.
+  (still usable, but flagged in the lists). **Delete batch** removes the batch
+  *and every beneficiary filed in it*: those records are deleted permanently, so
+  the page shows how many will go and asks you to type the batch name to
+  confirm. To keep the records, remove them from the batch first — they then
+  stay in the register as *Unassigned*.
 - The **Batch** dropdown on the *Beneficiaries* list filters by a specific batch
   or by *Unassigned*; each option shows how many records it holds, and the list
   also has a **Batch** column.
@@ -133,7 +143,10 @@ and skipped — expected, not a data corruption.
 ## 4. Reports and exports
 
 *Reports* provides the same filters as the beneficiary list plus created-date
-range. Summary cards link straight to flagged views:
+range. The **Batch** filter narrows the list to one release batch, or to
+**Unassigned** for records that are not yet in any batch; each option shows the
+batch name and its number of members, and each row shows its batch. Summary
+cards link straight to flagged views:
 
 - Underage
 - Needs review (missing/invalid age)
@@ -146,7 +159,48 @@ with the same records you see on screen. Exports are logged in the audit trail
 tab or carriage return are prefixed with `'`; XLSX cells are written as literal
 text — neither format can execute a formula.
 
+**Export XLSX** reproduces the DOLE **Annex D — Profile of TUPAD Beneficiaries**
+form (`Sample format.xlsx`): masthead rows 1–10, the two-row merged header on
+rows 13–14, and one beneficiary per row from row 15. The Province,
+Municipality, and Barangay lines are filled only when the filtered set covers a
+single value for that field; a mixed selection leaves them blank. Columns are:
+ID Number, COS Number, No. (`source_row_no`), Name of Beneficiary (first,
+middle, last, extension), Birthdate (`YYYY/MM/DD`), Project Location (Brgy.,
+City/Municipality, Province, District), Type of ID, ID No., Contact No.,
+E-payment/Account No., Type of Beneficiary, Occupation, Sex, Civil Status, Age,
+Average monthly income, Dependent, wage-employment interest, and Skills
+Training Needed. **Export CSV** stays a flat, one-column-per-field data dump.
+
+Exports are named in the DOLE workbook convention —
+`TUPAD PROFILE OF BENEFICIARIES-DATU PAGLAS BARMM (83).xlsx`, where the
+municipality comes from the filtered set and the number in parentheses is the
+record count. If a batch is selected and its members span several towns, the
+town in the batch name is used (for example batch
+`DATU PAGLAS, MAGUINDANAO DEL SUR BARMM (100)` exports as
+`TUPAD PROFILE OF BENEFICIARIES-DATU PAGLAS BARMM (87).xlsx`). Only when
+neither applies is the location part dropped:
+`TUPAD PROFILE OF BENEFICIARIES (1283).xlsx`.
+
 Staff can view reports on screen but cannot download personal-data exports.
+
+### When the reports page will not load
+
+On an offline server the reports page can fail if the site's code was updated
+without the database updates being applied (the batch tables are then missing).
+The page then explains what is missing instead of showing a blank error, and
+lists the pending updates with the commands to run:
+
+```
+php artisan migrate --force
+php artisan config:clear
+php artisan view:clear
+```
+
+Every failure is also written to the audit trail as `report.error` (with the
+missing schema, pending migrations, PHP and database versions), so the cause
+reaches the central server with the next synchronization. The same check
+appears on the offline server's **Sync → Diagnostics** page under *Database
+updates*.
 
 ## 5. ID cards
 
@@ -181,7 +235,32 @@ record; back signatures are fixed office titles.
 *Audit log* shows who did what and when, with filters for user, action, and date
 range. It includes sign-ins, beneficiary changes, import lifecycle, duplicate
 decisions, exports, and card printing. Entries contain minimal metadata — never
-passwords or full row dumps.
+passwords or full row dumps. The **Details** column lists that metadata as
+labelled values (for example the batch name, the number of records affected, and
+the affected beneficiaries by name — taken from their deletion entry once a
+record is gone, falling back to their id), so an entry can be read without
+decoding raw JSON. Long lists are collapsed behind an "N items" toggle that
+reveals every value.
+
+The **Action** filter is written in plain language and grouped by area (sign-in
+activity, beneficiaries, batches, imports, exports and printing, accounts,
+offline installations, sync requests). Each option shows how many entries it
+has, for example "Registered a beneficiary (102)". Actions that were renamed
+over time appear once and match every entry recorded under either name. The
+Action column of the table uses the same wording; the original technical name
+is available as a tooltip.
+
+"Registered a beneficiary" and "Assigned a beneficiary to a batch" are different
+events: the first records that a new beneficiary record was created, the second
+that a record became a member of a batch. Registering a beneficiary from a
+batch does both, so one registration produces two entries (one under
+*Beneficiaries*, one under *Batches*) — that is why their counts usually match.
+
+The **Actor** column shows the person's name with their role underneath
+(Encoder, Manager, Administrator). Entries made on an offline installation are
+named from the account registry that installation reports to the central
+server; if no name is known the username is shown instead. The username is
+available as a tooltip when hovering the name.
 
 ## Registering a beneficiary (updated 2026-10-21)
 

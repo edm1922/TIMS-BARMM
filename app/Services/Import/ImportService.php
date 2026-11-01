@@ -3,16 +3,19 @@
 namespace App\Services\Import;
 
 use App\Models\Beneficiary;
+use App\Models\BeneficiaryBatch;
 use App\Models\ImportBatch;
 use App\Models\ImportRow;
 use App\Models\Location;
 use App\Services\AuditLogger;
+use App\Support\SyncIdentity;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use RuntimeException;
 
 /**
  * Dry-run preview and transactional apply (docs/import-workflow.md §5–§8).
@@ -54,10 +57,11 @@ class ImportService
         $rows = [];
         $seenSourceIds = [];
         $seenNames = [];
+        $seenGovIds = [];
         $counts = array_fill_keys(['new', 'update', 'unchanged', 'duplicate', 'invalid', 'review'], 0);
 
         foreach ($parsed as $item) {
-            $row = $this->classify($item, $existing, $batch, $seenSourceIds, $seenNames);
+            $row = $this->classify($item, $existing, $batch, $seenSourceIds, $seenNames, $seenGovIds);
             $counts[$row['outcome']]++;
             $rows[] = $row;
         }
@@ -102,48 +106,132 @@ class ImportService
         $updated = 0;
         $skipped = 0;
         $flagged = 0;
+        $failedRows = 0;
         $failureExcelRow = null;
 
         try {
-            DB::transaction(function () use ($batch, $decisions, &$inserted, &$updated, &$skipped, &$flagged, &$failureExcelRow) {
-                $batch->rows()->where('applied', false)->chunkById(200, function ($rows) use ($batch, $decisions, &$inserted, &$updated, &$skipped, &$flagged, &$failureExcelRow) {
+            DB::transaction(function () use ($batch, $decisions, &$inserted, &$updated, &$skipped, &$flagged, &$failedRows, &$failureExcelRow) {
+                // Slots left in the target batch; null means no limit.
+                $targetBatch = $batch->beneficiary_batch_id !== null
+                    ? BeneficiaryBatch::query()->find($batch->beneficiary_batch_id)
+                    : null;
+                $remainingSlots = $targetBatch?->remainingCapacity();
+
+                $batch->rows()->where('applied', false)->chunkById(200, function ($rows) use ($batch, $decisions, &$inserted, &$updated, &$skipped, &$flagged, &$failedRows, &$failureExcelRow, &$remainingSlots) {
                     foreach ($rows as $row) {
                         $decision = $this->effectiveDecision($row, $decisions);
 
                         try {
-                            match ($decision) {
-                                'insert' => (function () use ($row, $batch, &$inserted, &$flagged) {
-                                    $payload = $row->payload ?? [];
-                                    unset($payload['birthdate_raw'], $payload['contact_no_raw']);
-                                    $payload['import_batch_id'] = $batch->id;
-                                    if ($batch->beneficiary_batch_id) {
-                                        $payload['beneficiary_batch_id'] = $batch->beneficiary_batch_id;
-                                    }
-                                    $this->resolveLocationCode($payload);
+                            // Each row runs in its own savepoint: a rejected
+                            // record never rolls back its neighbours.
+                            DB::transaction(function () use ($row, $batch, $decision, &$inserted, &$updated, &$skipped, &$flagged, &$remainingSlots) {
+                                match ($decision) {
+                                    'insert' => (function () use ($row, $batch, &$inserted, &$flagged, &$remainingSlots) {
+                                        $payload = $row->payload ?? [];
+                                        unset($payload['birthdate_raw'], $payload['contact_no_raw']);
+                                        $payload['import_batch_id'] = $batch->id;
+                                        // The profiling date chosen on the import page
+                                        // drives date-based reporting, not the upload time.
+                                        $payload['profiled_on'] = $batch->profiling_date?->toDateString()
+                                            ?? now()->toDateString();
+                                        if ($batch->beneficiary_batch_id) {
+                                            $payload['beneficiary_batch_id'] = $batch->beneficiary_batch_id;
+                                        }
+                                        $this->resolveLocationCode($payload);
 
-                                    $beneficiary = Beneficiary::createWithCode($payload);
-                                    $inserted++;
+                                        // Race guard: recheck uniqueness right before
+                                        // the insert instead of failing the whole batch.
+                                        $this->assertGovernmentIdAvailable($payload);
 
-                                    if ($beneficiary->duplicate_status === 'candidate') {
-                                        $flagged++;
-                                    }
-                                })(),
-                                'update' => (function () use ($row, &$updated) {
-                                    $payload = $row->payload ?? [];
-                                    unset($payload['birthdate_raw'], $payload['contact_no_raw'], $payload['beneficiary_code']);
-                                    $this->resolveLocationCode($payload);
+                                        // Capacity guard: the target batch may not
+                                        // exceed its configured limit.
+                                        if ($remainingSlots !== null && $remainingSlots <= 0) {
+                                            throw new RuntimeException(
+                                                'batch_capacity: the target release batch has reached its beneficiary limit.',
+                                            );
+                                        }
 
-                                    $matched = Beneficiary::query()->find($row->matched_beneficiary_id);
-                                    if ($matched !== null) {
-                                        $matched->update($payload);
-                                        $updated++;
-                                    } else {
-                                        $skipped++;
-                                    }
-                                })(),
-                                default => $skipped++,
-                            };
+                                        $beneficiary = Beneficiary::createWithCode($payload);
+                                        $inserted++;
+
+                                        if ($payload['beneficiary_batch_id'] ?? null) {
+                                            if ($remainingSlots !== null) {
+                                                $remainingSlots = max(0, $remainingSlots - 1);
+                                            }
+                                        }
+
+                                        if ($beneficiary->duplicate_status === 'candidate') {
+                                            $flagged++;
+                                        }
+                                    })(),
+                                    'update' => (function () use ($row, $batch, &$updated, &$remainingSlots) {
+                                        $payload = $row->payload ?? [];
+                                        unset($payload['birthdate_raw'], $payload['contact_no_raw'], $payload['beneficiary_code']);
+                                        if ($batch->beneficiary_batch_id) {
+                                            $payload['beneficiary_batch_id'] = $batch->beneficiary_batch_id;
+                                        }
+                                        $this->resolveLocationCode($payload);
+
+                                        $matched = Beneficiary::query()->find($row->matched_beneficiary_id);
+                                        if ($matched !== null) {
+                                            $movesIntoBatch = $batch->beneficiary_batch_id !== null
+                                                && (int) $matched->beneficiary_batch_id !== (int) $batch->beneficiary_batch_id;
+
+                                            if ($movesIntoBatch && $remainingSlots !== null && $remainingSlots <= 0) {
+                                                throw new RuntimeException(
+                                                    'batch_capacity: the target release batch has reached its beneficiary limit.',
+                                                );
+                                            }
+
+                                            // Never overwrite a profiling date that is
+                                            // already set; only fill a missing one.
+                                            if ($matched->profiled_on === null && $batch->profiling_date !== null) {
+                                                $payload['profiled_on'] = $batch->profiling_date;
+                                            }
+                                            $matched->update($payload);
+                                            $updated++;
+
+                                            if ($movesIntoBatch && $remainingSlots !== null) {
+                                                $remainingSlots = max(0, $remainingSlots - 1);
+                                            }
+                                        } else {
+                                            $skipped++;
+                                        }
+                                    })(),
+                                    default => $skipped++,
+                                };
+                            });
+                        } catch (RuntimeException $e) {
+                            if (str_starts_with($e->getMessage(), 'batch_capacity:')) {
+                                $failedRows++;
+                                $row->forceFill([
+                                    'apply_error' => 'The target release batch is full, so this row could not be added.',
+                                ])->save();
+
+                                continue;
+                            }
+
+                            if (str_starts_with($e->getMessage(), 'duplicate_government_id:')) {
+                                $failedRows++;
+                                $row->forceFill([
+                                    'apply_error' => mb_substr(substr($e->getMessage(), strlen('duplicate_government_id: ')), 0, 250),
+                                ])->save();
+
+                                continue;
+                            }
+
+                            $failureExcelRow = $row->excel_row;
+                            throw $e;
                         } catch (QueryException $e) {
+                            if ($this->isGovernmentIdDuplicate($e)) {
+                                $failedRows++;
+                                $row->forceFill([
+                                    'apply_error' => 'A beneficiary with this government ID number is already registered on this server.',
+                                ])->save();
+
+                                continue;
+                            }
+
                             $failureExcelRow = $row->excel_row;
                             throw $e;
                         }
@@ -162,7 +250,7 @@ class ImportService
                     'finished_at' => now(),
                 ]);
             });
-        } catch (QueryException $e) {
+        } catch (QueryException|RuntimeException $e) {
             $batch->update([
                 'status' => 'failed',
                 'failed' => 1,
@@ -180,6 +268,7 @@ class ImportService
                 'updated' => 0,
                 'skipped' => 0,
                 'flagged' => 0,
+                'failed_rows' => 0,
                 'error' => $e->getMessage(),
                 'excel_row' => $failureExcelRow,
             ];
@@ -193,6 +282,7 @@ class ImportService
             'updated' => $updated,
             'skipped' => $skipped,
             'flagged' => $flagged,
+            'failed_rows' => $failedRows,
         ]);
 
         return [
@@ -201,9 +291,67 @@ class ImportService
             'updated' => $updated,
             'skipped' => $skipped,
             'flagged' => $flagged,
+            'failed_rows' => $failedRows,
             'error' => null,
             'excel_row' => null,
         ];
+    }
+
+    /**
+     * Throw when the payload's government ID already exists on this server.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function assertGovernmentIdAvailable(array $payload): void
+    {
+        $govId = (string) ($payload['source_id_no'] ?? '');
+
+        if ($govId === '') {
+            return;
+        }
+
+        $exists = Beneficiary::query()
+            ->where('source_id_no', $govId)
+            ->where('origin_server_uuid', SyncIdentity::originUuid())
+            ->exists();
+
+        if ($exists) {
+            throw new RuntimeException(
+                'duplicate_government_id: a beneficiary with this government ID number is already registered on this server.',
+            );
+        }
+    }
+
+    private function isGovernmentIdDuplicate(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        return (string) $exception->getCode() === '23000'
+            && str_contains($message, 'source_id_no');
+    }
+
+    /**
+     * Insert a single import row as a new beneficiary, using the same payload
+     * preparation as the batch apply (used by the "bypass leave blank" action).
+     *
+     * @param  array<string, mixed>  $payloadOverrides
+     */
+    public function insertRowAsNew(ImportBatch $batch, ImportRow $row, array $payloadOverrides = []): Beneficiary
+    {
+        $payload = array_merge($row->payload ?? [], $payloadOverrides);
+        unset($payload['birthdate_raw'], $payload['contact_no_raw']);
+
+        $payload['import_batch_id'] = $batch->id;
+        $payload['profiled_on'] = $batch->profiling_date?->toDateString() ?? now()->toDateString();
+
+        if ($batch->beneficiary_batch_id) {
+            $payload['beneficiary_batch_id'] = $batch->beneficiary_batch_id;
+        }
+
+        $this->resolveLocationCode($payload);
+        $this->assertGovernmentIdAvailable($payload);
+
+        return Beneficiary::createWithCode($payload);
     }
 
     /**
@@ -211,10 +359,33 @@ class ImportService
      */
     private function effectiveDecision(ImportRow $row, array $decisions): string
     {
+        // Administrator review decisions are per row and override the
+        // outcome-group defaults.
+        $review = match ($row->review_action) {
+            'approve_new' => 'insert',
+            'update_existing' => 'update',
+            'skip' => 'skip',
+            default => null,
+        };
+
+        if ($row->outcome === 'duplicate') {
+            // Unresolved government-ID conflicts are never registered.
+            if ($review === null && $row->duplicate_kind === 'government_id') {
+                return 'skip';
+            }
+
+            $decision = $review ?? ($decisions['duplicate'] ?? 'skip');
+
+            if ($decision === 'update' && $row->matched_beneficiary_id === null) {
+                return 'skip';
+            }
+
+            return $decision;
+        }
+
         $decision = match ($row->outcome) {
             'new' => $decisions['new'] ?? 'insert',
             'update' => $decisions['update'] ?? 'update',
-            'duplicate' => $decisions['duplicate'] ?? 'skip',
             'review' => $decisions['review'] ?? 'skip',
             default => 'skip', // unchanged, invalid, skipped
         };
@@ -272,6 +443,7 @@ class ImportService
      * @return array{
      *   by_code: array<string, Collection<int, Beneficiary>>,
      *   by_source_id_number: array<string, Collection<int, Beneficiary>>,
+     *   by_source_id_no: array<string, Collection<int, Beneficiary>>,
      *   by_name_key: array<string, Collection<int, Beneficiary>>,
      * }
      */
@@ -279,6 +451,7 @@ class ImportService
     {
         $codes = [];
         $sourceIds = [];
+        $govIds = [];
         $nameKeys = [];
 
         foreach ($payloads as $payload) {
@@ -287,6 +460,9 @@ class ImportService
             }
             if (! empty($payload['source_id_number'])) {
                 $sourceIds[] = $payload['source_id_number'];
+            }
+            if (! empty($payload['source_id_no'])) {
+                $govIds[] = $payload['source_id_no'];
             }
             $nameKeys[] = RowParser::nameKey($payload);
         }
@@ -306,6 +482,11 @@ class ImportService
                     ->groupBy('source_id_number')
                     ->all()
                 : [],
+            'by_source_id_no' => collect(array_unique($govIds))
+                ->chunk(1000)
+                ->flatMap(fn ($chunk) => $base->clone()->whereIn('source_id_no', $chunk->all())->get())
+                ->groupBy('source_id_no')
+                ->all(),
             'by_name_key' => collect(array_unique($nameKeys))
                 ->chunk(1000)
                 ->flatMap(fn ($chunk) => $base->clone()->whereIn('name_key', $chunk->all())->get())
@@ -319,9 +500,10 @@ class ImportService
      * @param  array{by_code: array<string, Collection<int, Beneficiary>>, by_source_id_number: array<string, Collection<int, Beneficiary>>, by_name_key: array<string, Collection<int, Beneficiary>>}  $existing
      * @param  array<string, int>  $seenSourceIds
      * @param  array<string, int>  $seenNames
+     * @param  array<string, int>  $seenGovIds
      * @return array<string, mixed>
      */
-    private function classify(array $item, array $existing, ImportBatch $batch, array &$seenSourceIds, array &$seenNames): array
+    private function classify(array $item, array $existing, ImportBatch $batch, array &$seenSourceIds, array &$seenNames, array &$seenGovIds): array
     {
         $payload = $item['payload'];
         $messages = $item['messages'];
@@ -332,6 +514,7 @@ class ImportService
         $candidateIds = [];
         $matchedId = null;
         $outcome = null;
+        $duplicateKind = null;
 
         if (! $item['valid']) {
             $outcome = 'invalid';
@@ -340,7 +523,17 @@ class ImportService
             $sn = $payload['source_id_number'] ?? null;
             $nameSig = $nameKey.'|'.($hasBirthdate ? $birthdate : '');
 
-            if ($sn !== null && isset($seenSourceIds[$sn])) {
+            $govId = trim((string) ($payload['source_id_no'] ?? ''));
+
+            if ($govId !== '' && isset($seenGovIds[$govId])) {
+                $outcome = 'duplicate';
+                $duplicateKind = 'government_id_in_file';
+                $messages[] = [
+                    'severity' => 'warning',
+                    'field' => 'source_id_no',
+                    'text' => 'government_id_in_file: government ID "'.$govId.'" also appears in Excel row '.$seenGovIds[$govId],
+                ];
+            } elseif ($sn !== null && isset($seenSourceIds[$sn])) {
                 $outcome = 'review';
                 $messages[] = ['severity' => 'warning', 'field' => 'source_id_number', 'text' => 'in_file_duplicate: ID NUMBER also appears in Excel row '.$seenSourceIds[$sn]];
             } elseif ($hasBirthdate && isset($seenNames[$nameSig])) {
@@ -349,6 +542,9 @@ class ImportService
             } else {
                 if ($sn !== null) {
                     $seenSourceIds[$sn] = $item['excel_row'];
+                }
+                if ($govId !== '') {
+                    $seenGovIds[$govId] = $item['excel_row'];
                 }
                 $seenNames[$nameSig] = $item['excel_row'];
             }
@@ -381,6 +577,10 @@ class ImportService
                         $matched = $matches->first();
                         $matchedId = $matched->id;
                         $changed = $this->changedFields($payload, $matched);
+                        if ($batch->beneficiary_batch_id !== null
+                            && (int) $matched->beneficiary_batch_id !== (int) $batch->beneficiary_batch_id) {
+                            $changed[] = 'beneficiary_batch_id';
+                        }
                         if ($changed === []) {
                             $outcome = 'unchanged';
                         } else {
@@ -388,10 +588,40 @@ class ImportService
                             $messages[] = ['severity' => 'info', 'field' => implode(', ', $changed), 'text' => 'fields_changed: '.implode(', ', $changed)];
                         }
                     }
+                } elseif (($govId = (string) ($payload['source_id_no'] ?? '')) !== ''
+                    && ($govMatches = $existing['by_source_id_no'][$govId] ?? collect())->isNotEmpty()) {
+                    // The imported government ID is already registered. Flag
+                    // for administrator review instead of aborting the batch.
+                    $outcome = 'duplicate';
+                    $duplicateKind = 'government_id';
+
+                    $sameOrigin = $govMatches->first(
+                        fn (Beneficiary $match): bool => $match->origin_server_uuid === SyncIdentity::originUuid(),
+                    );
+                    $matched = $sameOrigin ?? $govMatches->first();
+                    $matchedId = $matched->id;
+                    $candidateIds = $govMatches->pluck('id')->all();
+
+                    $messages[] = [
+                        'severity' => 'warning',
+                        'field' => 'source_id_no',
+                        'text' => 'government_id_exists: "'.$govId.'" is already registered to '
+                            .trim($matched->last_name.', '.$matched->first_name).' ('.$matched->beneficiary_code.')',
+                    ];
+
+                    if ($sameOrigin !== null) {
+                        $messages[] = [
+                            'severity' => 'warning',
+                            'field' => 'source_id_no',
+                            'text' => 'government_id_blocked: this ID number is unique on this server; '
+                                .'choose "update existing" or "skip" (a separate new registration is not permitted).',
+                        ];
+                    }
                 } elseif ($hasBirthdate && ($candidates = $existing['by_name_key'][$nameKey] ?? collect())->isNotEmpty()) {
                     $candidates = $candidates->filter(fn (Beneficiary $b) => $b->birthdate?->toDateString() === $birthdate);
                     if ($candidates->isNotEmpty()) {
                         $outcome = 'duplicate';
+                        $duplicateKind = 'name_birthdate';
                         $candidateIds = $candidates->pluck('id')->all();
                         $messages[] = ['severity' => 'warning', 'field' => 'first_name,last_name,birthdate', 'text' => 'duplicate_name_birthdate: matches existing '.implode(', ', $candidates->pluck('beneficiary_code')->all())];
                     }
@@ -399,6 +629,7 @@ class ImportService
 
                 if ($outcome === null && ($weak = $existing['by_name_key'][$nameKey] ?? collect())->isNotEmpty()) {
                     $outcome = 'duplicate';
+                    $duplicateKind = 'name_weak';
                     $candidateIds = $weak->pluck('id')->all();
                     $messages[] = ['severity' => 'warning', 'field' => 'first_name,last_name', 'text' => 'duplicate_name_weak: same name as existing '.implode(', ', $weak->pluck('beneficiary_code')->all()).' (advisory only)'];
                 }
@@ -420,6 +651,7 @@ class ImportService
         return [
             'excel_row' => $item['excel_row'],
             'outcome' => $outcome,
+            'duplicate_kind' => $duplicateKind,
             'matched_beneficiary_id' => $matchedId,
             'candidate_ids' => $candidateIds === [] ? null : $candidateIds,
             'messages' => $messages === [] ? null : $messages,

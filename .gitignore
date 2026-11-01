@@ -32,3 +32,21 @@ Thumbs.db
 /storage/app/private/*
 !/storage/app/private/.gitignore
 /exports/
+
+# Local tooling, generated graphs and scratch/debug files
+/.dsh
+/.opencode
+/Documents
+/graphify-out
+/Request.txt
+/test_output.txt
+/test_results*.txt
+/check_admin.php
+/check_col.php
+/query
+/test_package.php
+/install_openpyxl.py
+/install_packages.bat
+/read_dam_sheet.py
+/read_excel.py
+/RGB-DOLE-LOGO-WITH-BLACK-WORDMARK-PNG.png

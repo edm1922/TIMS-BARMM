@@ -2,6 +2,9 @@
 
 namespace App\Support;
 
+use App\Models\BeneficiaryOptionValue;
+use Illuminate\Support\Facades\Schema;
+
 /**
  * Controlled vocabularies for beneficiary registration.
  *
@@ -17,9 +20,140 @@ final class BeneficiaryOptions
     public const EXTENSION_NONE = 'NONE';
 
     /**
+     * Runtime-added option values, grouped by field.
+     *
+     * @var array<string, array<string, string>>|null
+     */
+    private static ?array $extraOptions = null;
+
+    /**
+     * Fields whose controlled vocabulary can be extended at runtime.
+     *
+     * @return list<string>
+     */
+    public static function editableFields(): array
+    {
+        return ['occupation', 'id_type', 'beneficiary_signify', 'beneficiary_type', 'mode_of_payment'];
+    }
+
+    /**
+     * Human label for an option field.
+     */
+    public static function fieldLabel(string $field): string
+    {
+        return [
+            'occupation' => 'Occupation',
+            'id_type' => 'Type of ID',
+            'beneficiary_signify' => 'Beneficiary signify',
+            'beneficiary_type' => 'Type of beneficiary',
+            'mode_of_payment' => 'Mode of payment',
+        ][$field] ?? ucfirst(str_replace('_', ' ', $field));
+    }
+
+    /**
+     * Canonical option lists merged with administrator-added values.
+     *
      * @return array<string, string> value => label
      */
     public static function occupations(): array
+    {
+        return self::mergeOptions(self::baseOccupations(), 'occupation');
+    }
+
+    /**
+     * @return array<string, string> value => label
+     */
+    public static function idTypes(): array
+    {
+        return self::mergeOptions(self::baseIdTypes(), 'id_type');
+    }
+
+    /**
+     * @return array<string, string> value => label
+     */
+    public static function benefifySignify(): array
+    {
+        return self::mergeOptions(self::baseBenefifySignify(), 'beneficiary_signify');
+    }
+
+    /**
+     * @return array<string, string> value => label
+     */
+    public static function beneficiaryTypes(): array
+    {
+        return self::mergeOptions(self::baseBeneficiaryTypes(), 'beneficiary_type');
+    }
+
+    /**
+     * @return array<string, string> value => label
+     */
+    public static function modesOfPayment(): array
+    {
+        return self::mergeOptions(self::baseModesOfPayment(), 'mode_of_payment');
+    }
+
+    /**
+     * @return array<string, string> value => label
+     */
+    public static function extensions(): array
+    {
+        return self::mergeOptions(self::baseExtensions(), 'extension_name');
+    }
+
+    /**
+     * @param  array<string, string>  $base
+     * @return array<string, string>
+     */
+    private static function mergeOptions(array $base, string $field): array
+    {
+        foreach (self::extrasFor($field) as $value => $label) {
+            if (! array_key_exists($value, $base)) {
+                $base[$value] = $label;
+            }
+        }
+
+        return $base;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function extrasFor(string $field): array
+    {
+        self::loadExtras();
+
+        return self::$extraOptions[$field] ?? [];
+    }
+
+    private static function loadExtras(): void
+    {
+        if (self::$extraOptions !== null) {
+            return;
+        }
+
+        self::$extraOptions = [];
+
+        if (! Schema::hasTable('beneficiary_option_values')) {
+            return;
+        }
+
+        foreach (BeneficiaryOptionValue::query()->orderBy('value')->get() as $row) {
+            self::$extraOptions[$row->field][$row->value] = $row->value;
+        }
+    }
+
+    /**
+     * Clear the per-request cache after a new option is added.
+     */
+    public static function flushExtraCache(): void
+    {
+        self::$extraOptions = null;
+    }
+
+    /**
+     * @return array<string, string> value => label
+     */
+    private static function baseOccupations(): array
     {
         return [
             'TRANSPORT WORKER' => 'TRANSPORT WORKER',
@@ -37,7 +171,7 @@ final class BeneficiaryOptions
     /**
      * @return array<string, string> value => label
      */
-    public static function idTypes(): array
+    private static function baseIdTypes(): array
     {
         return [
             "VOTER'S ID" => "VOTER'S ID",
@@ -51,6 +185,7 @@ final class BeneficiaryOptions
             'NATIONAL ID' => 'NATIONAL ID',
             'TIN ID' => 'TIN ID',
             'PHILSYS ID' => 'PHILSYS ID',
+            'PHILHEALTH' => 'PHILHEALTH',
             'BARANGAY ID' => 'BARANGAY ID',
             'BARANGAY CLEARANCE' => 'BARANGAY CLEARANCE',
             'NBI CLEARANCE' => 'NBI CLEARANCE',
@@ -62,7 +197,7 @@ final class BeneficiaryOptions
     /**
      * @return array<string, string> value => label
      */
-    public static function benefifySignify(): array
+    private static function baseBenefifySignify(): array
     {
         return [
             'SKILLS TRAINING' => 'SKILLS TRAINING',
@@ -75,7 +210,7 @@ final class BeneficiaryOptions
     /**
      * @return array<string, string> value => label
      */
-    public static function beneficiaryTypes(): array
+    private static function baseBeneficiaryTypes(): array
     {
         return [
             'BALIK PROBINSYA BAGONG PAG-ASA BENEFICIARIES' => 'BALIK PROBINSYA BAGONG PAG-ASA BENEFICIARIES',
@@ -100,7 +235,7 @@ final class BeneficiaryOptions
     /**
      * @return array<string, string> value => label
      */
-    public static function modesOfPayment(): array
+    private static function baseModesOfPayment(): array
     {
         return [
             'BANK' => 'BANK',
@@ -114,7 +249,7 @@ final class BeneficiaryOptions
      *
      * @return array<string, string> value => label
      */
-    public static function extensions(): array
+    private static function baseExtensions(): array
     {
         return [
             'NONE' => 'NONE',
@@ -175,5 +310,73 @@ final class BeneficiaryOptions
         }
 
         return ! in_array($value, self::values($field), true);
+    }
+
+    /**
+     * Known government ID number formats, per ID type. The single source of
+     * truth for both the browser's live masking (the view exposes this map as
+     * JSON) and the server-side normalization before storing.
+     *
+     * pattern — characters to KEEP (everything else is stripped)
+     * groups  — separator positions, as character counts per group
+     *
+     * @return array<string, array{pattern: string, groups: list<int>, uppercase: bool}>
+     */
+    public static function idNumberMasks(): array
+    {
+        return [
+            'NATIONAL ID' => ['pattern' => '[^0-9]', 'groups' => [4, 4, 4, 4], 'uppercase' => false],
+            'PHILSYS ID' => ['pattern' => '[^0-9]', 'groups' => [4, 4, 4, 4], 'uppercase' => false],
+            'PHILHEALTH' => ['pattern' => '[^0-9]', 'groups' => [2, 9, 1], 'uppercase' => false],
+            'TIN ID' => ['pattern' => '[^0-9]', 'groups' => [3, 3, 3, 3], 'uppercase' => false],
+        ];
+    }
+
+    /**
+     * Apply the known format for an ID type to a Government ID No. value.
+     * Unknown ID types and blank values pass through untouched, so OTHERS
+     * (free text) and legacy data are never mangled.
+     */
+    public static function formatIdNumber(?string $idType, ?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $mask = self::idNumberMasks()[mb_strtoupper(trim((string) $idType))] ?? null;
+
+        if ($mask === null) {
+            return $value;
+        }
+
+        $cleaned = preg_replace('/'.$mask['pattern'].'/u', '', $value) ?? '';
+
+        if ($cleaned === '') {
+            return '';
+        }
+
+        if ($mask['uppercase']) {
+            $cleaned = mb_strtoupper($cleaned);
+        }
+
+        $parts = [];
+        $position = 0;
+
+        foreach ($mask['groups'] as $size) {
+            if ($position >= mb_strlen($cleaned)) {
+                break;
+            }
+
+            $parts[] = mb_substr($cleaned, $position, $size);
+            $position += $size;
+        }
+
+        if ($position < mb_strlen($cleaned)) {
+            // Preserve anything beyond the defined groups rather than
+            // truncating operator input.
+            $parts[] = mb_substr($cleaned, $position);
+        }
+
+        return implode('-', $parts);
     }
 }

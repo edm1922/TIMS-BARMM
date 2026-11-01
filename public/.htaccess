@@ -5,6 +5,12 @@
 
     RewriteEngine On
 
+    # Block sensitive framework and project files if they are ever placed here.
+    # OFFLINE*.md targets the requirement document only - it must not match the
+    # /offline-installation application route.
+    RewriteRule ^(?:\.env(?:\..*)?|\.git(?:/.*)?|composer\.(?:json|lock)|package\.json|phpunit\.xml|artisan|README\.md|OFFLINE[^/]*\.md|TIMS-BARMM\.md)$ - [F,L,NC]
+    RewriteRule ^(?:vendor|storage|database|tests|docs|config|resources|routes|app|bootstrap|node_modules)(?:/|$) - [F,L,NC]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
@@ -23,3 +29,7 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+<Files ".env">
+    Require all denied
+</Files>

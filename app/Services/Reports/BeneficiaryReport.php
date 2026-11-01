@@ -3,6 +3,7 @@
 namespace App\Services\Reports;
 
 use App\Models\Beneficiary;
+use App\Services\DuplicateDetector;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -12,27 +13,42 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class BeneficiaryReport
 {
-    public const STATUSES = ['active', 'archived', 'all'];
+    public const STATUSES = ['active', 'archived', 'all', 'missing'];
 
     public const AGE_STATUSES = ['adult', 'underage', 'unknown'];
+
+    public const AGE_RANGES = ['below18', '18-25', '26-31', '32-40', '41-50', '51-60', '61plus', 'unclassified'];
+
+    public const SORTS = ['registered', 'newest', 'name', 'name_desc'];
 
     public const DUPLICATE_STATUSES = ['none', 'candidate', 'confirmed_duplicate', 'cleared'];
 
     public const UNDERAGE_YEARS = 18;
 
     /**
-     * @return array{q: string, status: string, age_status: string, duplicate_status: string, created_from: ?string, created_to: ?string}
+     * @return array{q: string, status: string, batch: string, age_status: string, duplicate_status: string, created_from: ?string, created_to: ?string}
      */
     public static function filters(array $input): array
     {
         $status = (string) ($input['status'] ?? 'active');
         $age = (string) ($input['age_status'] ?? '');
         $duplicate = (string) ($input['duplicate_status'] ?? '');
+        $batch = trim((string) ($input['batch'] ?? ''));
+
+        $ageRange = (string) ($input['age_range'] ?? '');
+        $sex = strtoupper(trim((string) ($input['sex'] ?? '')));
+        $civilStatus = trim((string) ($input['civil_status'] ?? ''));
+        $sort = (string) ($input['sort'] ?? 'name');
 
         return [
             'q' => trim((string) ($input['q'] ?? '')),
             'status' => in_array($status, self::STATUSES, true) ? $status : 'active',
+            'batch' => $batch === 'unassigned' || ctype_digit($batch) ? $batch : '',
             'age_status' => in_array($age, self::AGE_STATUSES, true) ? $age : '',
+            'age_range' => in_array($ageRange, self::AGE_RANGES, true) ? $ageRange : '',
+            'sex' => in_array($sex, ['MALE', 'M', 'FEMALE', 'F'], true) ? $sex : '',
+            'civil_status' => $civilStatus,
+            'sort' => in_array($sort, self::SORTS, true) ? $sort : 'name',
             'duplicate_status' => in_array($duplicate, self::DUPLICATE_STATUSES, true) ? $duplicate : '',
             'created_from' => self::dateOrNull($input['created_from'] ?? null),
             'created_to' => self::dateOrNull($input['created_to'] ?? null),
@@ -41,14 +57,25 @@ class BeneficiaryReport
 
     public static function query(array $filters): Builder
     {
-        $query = Beneficiary::query()
-            ->orderBy('last_name')
-            ->orderBy('first_name')
-            ->orderBy('id');
+        $query = Beneficiary::query();
+
+        match ($filters['sort']) {
+            'registered' => $query->orderBy('id'),
+            'newest' => $query->orderByDesc('id'),
+            'name_desc' => $query->orderByDesc('last_name')->orderByDesc('first_name')->orderByDesc('id'),
+            default => $query->orderBy('last_name')->orderBy('first_name')->orderBy('id'),
+        };
 
         match ($filters['status']) {
             'archived' => $query->archived(),
             'all' => null,
+            'missing' => $query->active()->where(function ($missing): void {
+                $missing->whereNotNull('missing_fields')
+                    ->orWhere(fn ($gov) => $gov->whereNull('source_id_no')->orWhere('source_id_no', ''))
+                    ->orWhereNull('birthdate')
+                    ->orWhereNull('sex')
+                    ->orWhereNull('civil_status');
+            }),
             default => $query->active(),
         };
 
@@ -56,7 +83,29 @@ class BeneficiaryReport
             $query->search($filters['q']);
         }
 
+        if ($filters['batch'] === 'unassigned') {
+            $query->unassigned();
+        } elseif (ctype_digit($filters['batch'])) {
+            $query->inBatch((int) $filters['batch']);
+        }
+
         self::applyAgeFilter($query, $filters['age_status']);
+
+        if (($filters['age_range'] ?? '') !== '') {
+            self::applyAgeRangeFilter($query, (string) $filters['age_range']);
+        }
+
+        if (($filters['sex'] ?? '') !== '') {
+            $query->whereIn('sex', in_array($filters['sex'], ['MALE', 'M'], true) ? ['MALE', 'M'] : ['FEMALE', 'F']);
+        }
+
+        if (($filters['civil_status'] ?? '') !== '') {
+            $statuses = array_values(array_filter(array_map('trim', explode(',', (string) $filters['civil_status']))));
+
+            if ($statuses !== []) {
+                $query->whereIn('civil_status', $statuses);
+            }
+        }
 
         if ($filters['duplicate_status'] !== '') {
             $query->where('duplicate_status', $filters['duplicate_status']);
@@ -71,6 +120,69 @@ class BeneficiaryReport
         }
 
         return $query;
+    }
+
+    /**
+     * Single province / municipality / barangay covered by the filtered
+     * report. Used for the printed DOLE form masthead: a mixed selection
+     * leaves the value blank instead of claiming one location.
+     *
+     * @return array{province: ?string, municipality: ?string, barangay: ?string}
+     */
+    public static function locationScope(Builder $query): array
+    {
+        $values = [];
+
+        foreach (['province', 'city_municipality', 'barangay'] as $column) {
+            $distinct = (clone $query)
+                ->reorder()
+                ->whereNotNull($column)
+                ->where($column, '!=', '')
+                ->distinct()
+                ->limit(2)
+                ->pluck($column);
+
+            $values[$column] = $distinct->count() === 1 ? (string) $distinct->first() : null;
+        }
+
+        return [
+            'province' => $values['province'],
+            'municipality' => $values['city_municipality'],
+            'barangay' => $values['barangay'],
+        ];
+    }
+
+    private static function applyAgeRangeFilter(Builder $query, string $ageRange): void
+    {
+        if ($ageRange === 'unclassified') {
+            $query->where(function (Builder $q): void {
+                $q->whereNull('birthdate')->orWhereDate('birthdate', '>', now()->toDateString());
+            });
+
+            return;
+        }
+
+        $bounds = [
+            'below18' => [null, 18],
+            '18-25' => [18, 26],
+            '26-31' => [26, 32],
+            '32-40' => [32, 41],
+            '41-50' => [41, 51],
+            '51-60' => [51, 61],
+            '61plus' => [61, 150],
+        ][$ageRange] ?? null;
+
+        if ($bounds === null) {
+            return;
+        }
+
+        $query->whereNotNull('birthdate')->whereDate('birthdate', '<=', now()->toDateString());
+
+        if ($bounds[0] !== null) {
+            $query->whereDate('birthdate', '<=', now()->subYears($bounds[0])->toDateString());
+        }
+
+        $query->whereDate('birthdate', '>', now()->subYears($bounds[1])->toDateString());
     }
 
     private static function applyAgeFilter(Builder $query, string $ageStatus): void
@@ -119,6 +231,7 @@ class BeneficiaryReport
             'employment_interest' => 'Employment interest',
             'skills_training_needed' => 'Skills training needed',
             'duplicate_status' => 'Duplicate status',
+            'duplicate_rule' => 'Duplicate reason',
             'import_batch_id' => 'Import batch',
             'archived_at' => 'Archived at',
             'notes' => 'Notes',
@@ -164,6 +277,9 @@ class BeneficiaryReport
             'employment_interest' => $beneficiary->employment_interest,
             'skills_training_needed' => $beneficiary->skills_training_needed,
             'duplicate_status' => $beneficiary->duplicate_status,
+            'duplicate_rule' => $beneficiary->duplicate_rule !== null
+                ? DuplicateDetector::ruleLabel($beneficiary->duplicate_rule)
+                : null,
             'import_batch_id' => $beneficiary->import_batch_id,
             'archived_at' => $beneficiary->archived_at?->format('Y-m-d H:i'),
             'notes' => $beneficiary->notes,
@@ -172,6 +288,76 @@ class BeneficiaryReport
         ];
 
         return array_map(fn ($value) => $value === null ? '' : (string) $value, $values);
+    }
+
+    /**
+     * Filename in the DOLE workbook convention, e.g.
+     * "TUPAD PROFILE OF BENEFICIARIES-DATU PAGLAS BARMM (83).xlsx".
+     * When the export spans several municipalities the selected batch's name
+     * supplies the area ("DATU PAGLAS, MAGUINDANAO DEL SUR BARMM (100)" ->
+     * "DATU PAGLAS"); otherwise the segment is omitted.
+     *
+     * @param  array{province?: ?string, municipality?: ?string, barangay?: ?string}  $location
+     */
+    public static function exportFilename(array $location, int $count, string $extension, ?string $batchName = null): string
+    {
+        $municipality = mb_strtoupper(
+            self::filenamePart(self::locationWithBatch($location, $batchName)['municipality'] ?? null),
+        );
+
+        $name = 'TUPAD PROFILE OF BENEFICIARIES';
+
+        if ($municipality !== '') {
+            $name .= '-'.$municipality.' BARMM';
+        }
+
+        return $name.' ('.$count.').'.$extension;
+    }
+
+    /**
+     * Fill a blank municipality from the selected batch's name so the printed
+     * form and the filename agree when the batch's members span towns.
+     *
+     * @param  array{province?: ?string, municipality?: ?string, barangay?: ?string}  $location
+     * @return array{province?: ?string, municipality?: ?string, barangay?: ?string}
+     */
+    public static function locationWithBatch(array $location, ?string $batchName): array
+    {
+        if (($location['municipality'] ?? null) === null && $batchName !== null) {
+            $area = self::batchArea($batchName);
+
+            if ($area !== '') {
+                $location['municipality'] = $area;
+            }
+        }
+
+        return $location;
+    }
+
+    /**
+     * Leading town/city from a batch name, minus any export-title prefix and
+     * member count: "DATU PAGLAS, MAGUINDANAO DEL SUR BARMM (100)" ->
+     * "DATU PAGLAS".
+     */
+    private static function batchArea(string $name): string
+    {
+        $area = preg_replace(
+            '/^\s*(?:(?:tupad\s+)?profile\s+of\s+tupad\s+beneficiaries)\s*[-–—:]\s*/i',
+            '',
+            $name,
+        ) ?? $name;
+
+        $parts = preg_split('/\s*[,\(]/', $area);
+
+        return mb_strtoupper(self::filenamePart($parts[0] ?? $area));
+    }
+
+    private static function filenamePart(?string $value): string
+    {
+        $value = preg_replace('/[\\\\\\/:*?"<>|]+/', ' ', (string) $value) ?? '';
+        $value = preg_replace('/\\s+/', ' ', $value) ?? '';
+
+        return trim($value);
     }
 
     /**

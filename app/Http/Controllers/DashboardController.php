@@ -14,9 +14,12 @@ class DashboardController extends Controller
         return view('dashboard', [
             'counts' => $summary['counts'],
             'assignment' => $summary['assignment'],
-            'openBatches' => $summary['open_batches'],
+            'batches' => $summary['batch_overview'],
             'recentBatches' => $summary['recent_imports'],
             'batchDistribution' => $summary['batch_distribution'],
+            'demographics' => $summary['demographics'],
+            'registrationTrend' => $summary['registration_trend'],
+            'batchYearData' => $summary['batch_distribution_by_year'],
         ]);
     }
 }

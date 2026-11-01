@@ -38,6 +38,19 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Application-private storage (published offline update packages and
+         * anything else that must never be served from the public disk).
+         * Kept as a named disk so code can express that intent explicitly.
+         */
+        'private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

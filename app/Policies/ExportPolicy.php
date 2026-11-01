@@ -12,6 +12,6 @@ class ExportPolicy
 {
     public function export(User $user): bool
     {
-        return $user->is_active && ($user->isAdmin() || $user->isEncoder());
+        return $user->is_active && ($user->isAdmin() || $user->isManager());
     }
 }

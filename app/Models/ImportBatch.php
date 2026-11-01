@@ -17,6 +17,7 @@ class ImportBatch extends Model
         'original_filename',
         'worksheet',
         'header_row',
+        'profiling_date',
         'status',
         'use_source_id_as_key',
         'mapping',
@@ -34,6 +35,7 @@ class ImportBatch extends Model
     protected function casts(): array
     {
         return [
+            'profiling_date' => 'date',
             'mapping' => 'array',
             'use_source_id_as_key' => 'boolean',
             'started_at' => 'datetime',

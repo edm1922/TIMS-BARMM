@@ -42,4 +42,35 @@ abstract class TestCase extends BaseTestCase
             ], $attributes),
         );
     }
+
+    /**
+     * A complete, valid beneficiary payload for the current registration form.
+     *
+     * @return array<string, mixed>
+     */
+    protected function beneficiaryPayload(Location $location, array $attributes = []): array
+    {
+        return array_merge([
+            'first_name' => 'TEST',
+            'middle_name' => null,
+            'last_name' => 'BENEFICIARY',
+            'extension_name' => 'NONE',
+            'birthdate' => '1990-01-01',
+            'id_type' => "VOTER'S ID",
+            'source_id_no' => 'TEST-GOV-ID-0001',
+            'contact_no' => '09000000000',
+            'beneficiary_type' => 'SENIOR CITIZEN',
+            'beneficiary_signify' => 'SKILLS TRAINING',
+            'mode_of_payment' => 'BANK',
+            'occupation' => 'VENDOR',
+            'sex' => 'FEMALE',
+            'civil_status' => 'SINGLE',
+            'avg_monthly_income' => 5000,
+            'dependent_name' => 'NONE',
+            'dependent_contact_no' => '09000000000',
+            'address' => $location->full_address,
+            'location_code' => $location->psgc_code,
+            'duplicate_check_done' => '1',
+        ], $attributes);
+    }
 }

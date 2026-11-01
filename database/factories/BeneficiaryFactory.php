@@ -26,6 +26,7 @@ class BeneficiaryFactory extends Factory
             'civil_status' => fake()->randomElement(['SINGLE', 'MARRIED', 'WIDOW']),
             'occupation' => fake()->randomElement(['Farmer', 'Vendor', 'Laborer', 'Fisherfolk']),
             'duplicate_status' => 'none',
+            'beneficiary_code' => '',
         ];
     }
 

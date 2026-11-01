@@ -7,6 +7,12 @@
     <div>
         <h1 class="h4 mb-0">Confirm worksheet &amp; mapping</h1>
         <div class="text-muted small">{{ $batch->original_filename }} — header row {{ $batch->header_row }}, data starts at row {{ $batch->mapping['data_start'] ?? '?' }}</div>
+        @if ($batch->profiling_date !== null)
+            <div class="text-muted small">
+                Beneficiary profiling date: <strong>{{ $batch->profiling_date->format('F j, Y') }}</strong>
+                — imported beneficiaries will be recorded under {{ $batch->profiling_date->format('F Y') }} in the dashboard trend.
+            </div>
+        @endif
     </div>
     <a class="btn btn-outline-secondary" href="{{ route('imports.index') }}">Cancel batch from the list page</a>
 </div>

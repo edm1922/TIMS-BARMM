@@ -29,6 +29,19 @@
                         @enderror
                     </div>
                     <div class="mb-3">
+                        <label class="form-label" for="profiling_date">Beneficiary Profiling Date</label>
+                        <input class="form-control @error('profiling_date') is-invalid @enderror"
+                               type="date" id="profiling_date" name="profiling_date"
+                               value="{{ old('profiling_date', now()->toDateString()) }}" required>
+                        <div class="form-text">
+                            Select the date when these beneficiaries were originally profiled or registered.
+                            This date will be used for monthly and yearly dashboard reporting.
+                        </div>
+                        @error('profiling_date')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label" for="workbook">Workbook (.xlsx, max 10 MB)</label>
                         <input class="form-control @error('workbook') is-invalid @enderror"
                                type="file" id="workbook" name="workbook" accept=".xlsx" required>

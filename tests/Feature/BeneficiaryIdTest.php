@@ -25,7 +25,7 @@ class BeneficiaryIdTest extends TestCase
     {
         $beneficiary = Beneficiary::createWithCode($this->baseAttributes());
 
-        $this->assertSame('JUAN-ANDRES-DELA-CRUZ-0001', $beneficiary->beneficiary_code);
+        $this->assertSame('DOLE XII-SCFO-BARMM-'.now()->format('mY').'-00001', $beneficiary->beneficiary_code);
     }
 
     public function test_same_name_gets_distinct_suffixes(): void
@@ -34,9 +34,9 @@ class BeneficiaryIdTest extends TestCase
         $b = Beneficiary::createWithCode($this->baseAttributes(['birthdate' => '1991-05-05']));
         $c = Beneficiary::createWithCode($this->baseAttributes(['birthdate' => '1992-06-06']));
 
-        $this->assertSame('JUAN-ANDRES-DELA-CRUZ-0001', $a->beneficiary_code);
-        $this->assertSame('JUAN-ANDRES-DELA-CRUZ-0002', $b->beneficiary_code);
-        $this->assertSame('JUAN-ANDRES-DELA-CRUZ-0003', $c->beneficiary_code);
+        $this->assertSame('DOLE XII-SCFO-BARMM-'.now()->format('mY').'-00001', $a->beneficiary_code);
+        $this->assertSame('DOLE XII-SCFO-BARMM-'.now()->format('mY').'-00002', $b->beneficiary_code);
+        $this->assertSame('DOLE XII-SCFO-BARMM-'.now()->format('mY').'-00003', $c->beneficiary_code);
     }
 
     public function test_code_is_stable_when_names_are_edited(): void
@@ -72,7 +72,7 @@ class BeneficiaryIdTest extends TestCase
             'middle_name' => null,
         ]));
 
-        $this->assertSame('JUAN-DELA-CRUZ-0001', $beneficiary->beneficiary_code);
+        $this->assertSame('DOLE XII-SCFO-BARMM-'.now()->format('mY').'-00001', $beneficiary->beneficiary_code);
     }
 
     public function test_punctuation_accents_and_whitespace_are_normalized(): void
@@ -85,7 +85,7 @@ class BeneficiaryIdTest extends TestCase
 
         $code = $beneficiary->beneficiary_code;
 
-        $this->assertStringStartsWith('JOSE-L-NAVARRO-SANTOS-', $code);
+        $this->assertStringStartsWith('DOLE XII-SCFO-BARMM-', $code);
         $this->assertStringNotContainsString('--', $code);
         $this->assertStringNotContainsString('N/A', $code);
     }
@@ -109,6 +109,6 @@ class BeneficiaryIdTest extends TestCase
             'birthdate' => '1993-03-03',
         ]));
 
-        $this->assertSame('JUAN-ANDRES-DELA-CRUZ-0002', $b->beneficiary_code);
+        $this->assertSame('DOLE XII-SCFO-BARMM-'.now()->format('mY').'-00002', $b->beneficiary_code);
     }
 }

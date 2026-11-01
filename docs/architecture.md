@@ -101,7 +101,9 @@ records where a row came from. Membership is exclusive: a beneficiary belongs to
 at most one batch (`beneficiaries.beneficiary_batch_id`), and assigning a record
 that already has a batch moves it. Batch actions are admin-only and audited
 (`beneficiary_batch.created` / `.updated` / `.deleted` / `.assigned` /
-`.unassigned`).
+`.unassigned`). Deleting a batch cascades: every beneficiary filed in it is
+permanently deleted (audited individually as `beneficiary.deleted`) and never
+left behind as an unassigned record.
 
 ### `trainings`
 `id`, `category`, `name`, timestamps. Seeded from hidden `List of Trainings` sheet (15 categories / 123 items). Used only as a suggestion list.
@@ -113,7 +115,7 @@ that already has a batch moves it. Batch actions are admin-only and audited
 `id`, `import_batch_id` FK, `excel_row` int, `outcome` enum(`new`,`update`,`unchanged`,`duplicate`,`invalid`,`review`,`skipped`), `matched_beneficiary_id` nullable FK, `candidate_ids` json, `messages` json, `operator_decision` enum(`insert`,`update`,`skip`,`review`) nullable, `applied` bool, timestamps. Unique `(import_batch_id, excel_row)`.
 
 ### `audit_logs`
-`id`, `user_id`, `action` (e.g. `beneficiary.created`, `import.applied`, `id_card.printed`, `export.csv`, `duplicate.resolved`), `entity_type`, `entity_id`, `metadata` json (minimal, no secrets), `ip`, timestamps. Index `(entity_type, entity_id)`, `(action, created_at)`.
+`id`, `user_id`, actor identity (`actor_uuid`, `actor_name`, `actor_username`, `actor_role`) so an event that arrived from an offline installation stays attributable, `origin_server_uuid`, `occurred_at`, `synced_at`, `action` (e.g. `beneficiary.created`, `import.applied`, `id_card.printed`, `export.csv`, `duplicate.resolved`), `entity_type`, `entity_id`, `metadata` json (minimal, no secrets), `ip`, timestamps. Index `(entity_type, entity_id)`, `(action, created_at)`.
 
 No ID-history table (single stable code per record per brief). No soft-deletes on beneficiaries — archive fields instead.
 

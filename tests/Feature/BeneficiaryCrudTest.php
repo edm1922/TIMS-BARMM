@@ -57,6 +57,36 @@ class BeneficiaryCrudTest extends TestCase
             ->assertSee($archived->beneficiary_code);
     }
 
+    public function test_records_filter_exposes_missing_fields_and_hides_removed_options(): void
+    {
+        $user = $this->staff();
+
+        $complete = Beneficiary::factory()->named('COMPLETE', null, 'RECORD')->create([
+            'source_id_no' => 'COMPLETE-GOV-1',
+            'birthdate' => '1990-01-01',
+            'sex' => 'MALE',
+            'civil_status' => 'SINGLE',
+        ]);
+
+        $missing = Beneficiary::factory()->named('INCOMPLETE', null, 'RECORD')->create([
+            'source_id_no' => null,
+        ]);
+
+        // The Flag dropdown and the Archived radio are gone.
+        $this->actingAs($user)->get('/beneficiaries')
+            ->assertOk()
+            ->assertSee('Missing fields')
+            ->assertDontSee('Archived')
+            ->assertDontSee('Flag')
+            ->assertSee($complete->beneficiary_code)
+            ->assertSee($missing->beneficiary_code);
+
+        $this->actingAs($user)->get('/beneficiaries?status=missing')
+            ->assertOk()
+            ->assertSee($missing->beneficiary_code)
+            ->assertDontSee($complete->beneficiary_code);
+    }
+
     public function test_index_searches_by_name_code_and_barangay(): void
     {
         $user = $this->staff();
@@ -93,6 +123,30 @@ class BeneficiaryCrudTest extends TestCase
             ->assertDontSee($target->beneficiary_code);
     }
 
+    public function test_index_lists_beneficiaries_in_registration_order_by_default(): void
+    {
+        $user = $this->staff();
+
+        $first = Beneficiary::factory()->named('ZARA', null, 'ZAMORA')->create();
+        $second = Beneficiary::factory()->named('ALMA', null, 'ABAD')->create();
+        $third = Beneficiary::factory()->named('MIA', null, 'CRUZ')->create();
+
+        // Registration order (oldest first), not alphabetical.
+        $this->actingAs($user)->get('/beneficiaries')
+            ->assertOk()
+            ->assertSeeInOrder([$first->beneficiary_code, $second->beneficiary_code, $third->beneficiary_code]);
+
+        // Alphabetical remains available as an explicit option.
+        $this->actingAs($user)->get('/beneficiaries?sort=name')
+            ->assertOk()
+            ->assertSeeInOrder(['ALMA ABAD', 'MIA CRUZ', 'ZARA ZAMORA']);
+
+        // Newest-first option.
+        $this->actingAs($user)->get('/beneficiaries?sort=newest')
+            ->assertOk()
+            ->assertSeeInOrder([$third->beneficiary_code, $second->beneficiary_code, $first->beneficiary_code]);
+    }
+
     public function test_index_filters_by_age_status(): void
     {
         $user = $this->staff();
@@ -111,6 +165,34 @@ class BeneficiaryCrudTest extends TestCase
             ->assertDontSee($minor->beneficiary_code);
     }
 
+    public function test_index_exposes_the_age_distribution_filter(): void
+    {
+        $user = $this->staff();
+
+        $thirties = Beneficiary::factory()->named('THIRTY', null, 'SOMETHING')
+            ->withBirthdate(now()->subYears(30)->toDateString())->create();
+        $sixties = Beneficiary::factory()->named('SIXTIES', null, 'SOMETHING')
+            ->withBirthdate(now()->subYears(65)->toDateString())->create();
+
+        $response = $this->actingAs($user)->get('/beneficiaries');
+
+        $response->assertOk()
+            ->assertSee('Age distribution')
+            ->assertSee('18–25 years')
+            ->assertSee('61 years and above')
+            ->assertSee('Unclassified');
+
+        $this->actingAs($user)->get('/beneficiaries?age_range=26-31')
+            ->assertOk()
+            ->assertSee($thirties->beneficiary_code)
+            ->assertDontSee($sixties->beneficiary_code);
+
+        $this->actingAs($user)->get('/beneficiaries?age_range=61plus')
+            ->assertOk()
+            ->assertSee($sixties->beneficiary_code)
+            ->assertDontSee($thirties->beneficiary_code);
+    }
+
     public function test_store_creates_record_with_generated_code_and_audit(): void
     {
         $user = $this->staff();
@@ -118,24 +200,21 @@ class BeneficiaryCrudTest extends TestCase
         $location = $this->seededLocation();
         $batch = $this->seededBatch(['name' => 'CRUD Batch']);
 
-        $payload = [
+        $payload = $this->beneficiaryPayload($location, [
             'first_name' => 'jane',
             'middle_name' => 'm',
             'last_name' => 'doe',
             'birthdate' => '1990-05-05',
             'sex' => 'female',
             'civil_status' => 'single',
-            'address' => $location->full_address,
-            'location_code' => $location->psgc_code,
-            'duplicate_check_done' => '1',
-        ];
+        ]);
 
         $response = $this->actingAs($user)->post('/batches/'.$batch->id.'/beneficiaries', $payload);
 
         $beneficiary = Beneficiary::query()->firstOrFail();
 
         $response->assertRedirect(route('beneficiary-batches.show', $batch));
-        $this->assertSame('JANE-M-DOE-0001', $beneficiary->beneficiary_code);
+        $this->assertSame('DOLE XII-SCFO-BARMM-'.now()->format('mY').'-00001', $beneficiary->beneficiary_code);
         $this->assertSame('JANE', $beneficiary->first_name);
         $this->assertSame($location->full_address, $beneficiary->address);
         $this->assertSame($location->psgc_code, $beneficiary->location_code);
@@ -211,25 +290,26 @@ class BeneficiaryCrudTest extends TestCase
     public function test_update_preserves_a_legacy_value_but_blocks_new_ones(): void
     {
         $admin = $this->admin();
+        $location = $this->seededLocation();
 
         $beneficiary = Beneficiary::factory()->create(['occupation' => 'FARMER']);
 
         // Unchanged legacy value is accepted on update.
-        $this->actingAs($admin)->put('/beneficiaries/'.$beneficiary->id, [
+        $this->actingAs($admin)->put('/beneficiaries/'.$beneficiary->id, $this->beneficiaryPayload($location, [
             'first_name' => $beneficiary->first_name,
             'last_name' => $beneficiary->last_name,
             'occupation' => 'FARMER',
-        ])->assertSessionHasNoErrors();
+        ]))->assertSessionHasNoErrors();
 
         $this->assertSame('FARMER', $beneficiary->refresh()->occupation);
 
         // A brand new out-of-list value is rejected.
         $this->actingAs($admin)->from('/beneficiaries/'.$beneficiary->id.'/edit')
-            ->put('/beneficiaries/'.$beneficiary->id, [
+            ->put('/beneficiaries/'.$beneficiary->id, $this->beneficiaryPayload($location, [
                 'first_name' => $beneficiary->first_name,
                 'last_name' => $beneficiary->last_name,
                 'occupation' => 'SPACEMAN',
-            ])->assertSessionHasErrors(['occupation']);
+            ]))->assertSessionHasErrors(['occupation']);
     }
 
     public function test_store_validates_required_fields(): void
@@ -247,19 +327,19 @@ class BeneficiaryCrudTest extends TestCase
     public function test_update_changes_fields_but_never_the_generated_code(): void
     {
         $user = $this->staff();
+        $location = $this->seededLocation();
 
         $beneficiary = Beneficiary::factory()->named('OLD', null, 'NAME')->create();
         $originalCode = $beneficiary->beneficiary_code;
 
-        $this->actingAs($user)->put('/beneficiaries/'.$beneficiary->id, [
+        $this->actingAs($user)->put('/beneficiaries/'.$beneficiary->id, $this->beneficiaryPayload($location, [
             'first_name' => 'NEW',
             'middle_name' => null,
             'last_name' => 'NAME',
             'birthdate' => '1985-12-31',
             'sex' => 'MALE',
             'civil_status' => 'MARRIED',
-            'barangay' => 'Renamed',
-        ])->assertRedirect(route('beneficiaries.show', $beneficiary));
+        ]))->assertRedirect(route('beneficiaries.show', $beneficiary));
 
         $beneficiary->refresh();
 
@@ -335,12 +415,89 @@ class BeneficiaryCrudTest extends TestCase
         $beneficiary = Beneficiary::factory()
             ->named('SHOW', 'CASE', 'PAGE')
             ->underage()
-            ->create();
+            ->create(['employment_interest' => 'YES']);
 
         $this->actingAs($user)->get('/beneficiaries/'.$beneficiary->id)
             ->assertOk()
             ->assertSee($beneficiary->beneficiary_code)
             ->assertSee('SHOW CASE PAGE')
-            ->assertSee('Underage');
+            ->assertSee('Underage')
+            ->assertSee('YES')
+            ->assertDontSee('Age (source)')
+            ->assertDontSee('DOLE ID NUMBER (source)');
+    }
+
+    public function test_show_page_escapes_user_supplied_fields(): void
+    {
+        $user = $this->staff();
+        $payload = '<script>alert("xss")</script>';
+
+        $beneficiary = Beneficiary::factory()->create(['dependent_name' => $payload]);
+
+        $this->actingAs($user)->get('/beneficiaries/'.$beneficiary->id)
+            ->assertOk()
+            ->assertDontSee($payload, false)
+            ->assertSee(e($payload), false);
+    }
+
+    public function test_the_beneficiary_index_uses_the_shared_dashboard_layout(): void
+    {
+        $user = $this->staff();
+
+        Beneficiary::factory()->count(3)->create();
+
+        $this->actingAs($user)->get('/beneficiaries')
+            ->assertOk()
+            ->assertSee('Search &amp; filter beneficiaries', false)
+            ->assertSee('Beneficiary records')
+            ->assertSee('Active records')
+            ->assertSee('Missing fields')
+            ->assertSee('Rows per page')
+            ->assertDontSee('Apply filters')
+            ->assertDontSee('Clear filters')
+            ->assertDontSee('Archived');
+    }
+
+    public function test_the_beneficiary_index_supports_page_size_selection(): void
+    {
+        $user = $this->staff();
+
+        Beneficiary::factory()->count(30)->create();
+
+        $response = $this->actingAs($user)->get('/beneficiaries?per_page=50&status=all')->assertOk();
+
+        $this->assertSame(50, $response->viewData('perPage'));
+        $this->assertSame(30, $response->viewData('beneficiaries')->count());
+
+        $fallback = $this->actingAs($user)->get('/beneficiaries?per_page=999')->assertOk();
+        $this->assertSame(25, $fallback->viewData('perPage'));
+    }
+
+    public function test_the_beneficiary_detail_page_uses_the_shared_workspace_layout(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $beneficiary = Beneficiary::factory()->named('DETAIL', 'M', 'RECORD')->create([
+            'contact_no' => '0917 123 4567',
+            'skills_training_needed' => 'AGRICULTURE CROPS PRODUCTION',
+        ]);
+
+        $this->actingAs($admin)->get(route('beneficiaries.show', $beneficiary))
+            ->assertOk()
+            ->assertSee('Identity')
+            ->assertSee('Address')
+            ->assertSee('Identification &amp; contact', false)
+            ->assertSee('Employment &amp; assistance', false)
+            ->assertSee('Additional information')
+            ->assertSee('Duplicate review')
+            ->assertSee('History')
+            ->assertSee('Age (computed)')
+            ->assertSee('Age status')
+            ->assertSee('Beneficiary ID')
+            ->assertSee('Government ID')
+            ->assertSee('Contact no.')
+            ->assertSee('Skills / training needed')
+            ->assertSee('AGRICULTURE CROPS PRODUCTION')
+            ->assertSee('Edit')
+            ->assertSee('id="deleteBeneficiaryModal"', false);
     }
 }

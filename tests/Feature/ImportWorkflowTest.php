@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Beneficiary;
+use App\Models\BeneficiaryBatch;
 use App\Models\ImportBatch;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -159,18 +160,27 @@ class ImportWorkflowTest extends TestCase
         return array_merge($defaults, $overrides);
     }
 
-    private function upload(User $user, string $path): TestResponse
+    private function upload(User $user, string $path, ?int $beneficiaryBatchId = null, ?string $profilingDate = null): TestResponse
     {
         $file = UploadedFile::fake()->createWithContent('profile.xlsx', (string) file_get_contents($path));
+        $payload = ['workbook' => $file];
 
-        return $this->actingAs($user)->post('/imports', ['workbook' => $file]);
+        if ($beneficiaryBatchId !== null) {
+            $payload['beneficiary_batch_id'] = $beneficiaryBatchId;
+        }
+
+        if ($profilingDate !== null) {
+            $payload['profiling_date'] = $profilingDate;
+        }
+
+        return $this->actingAs($user)->post('/imports', $payload);
     }
 
-    private function uploadAndPreview(string $path, ?User $user = null): ImportBatch
+    private function uploadAndPreview(string $path, ?User $user = null, ?int $beneficiaryBatchId = null, ?string $profilingDate = null): ImportBatch
     {
         $user ??= $this->staff();
 
-        $response = $this->upload($user, $path);
+        $response = $this->upload($user, $path, $beneficiaryBatchId, $profilingDate);
         $response->assertSessionHasNoErrors();
         $response->assertRedirectContains('/imports/');
         $batch = ImportBatch::query()->latest('id')->firstOrFail();
@@ -222,7 +232,7 @@ class ImportWorkflowTest extends TestCase
         $this->assertSame(2, Beneficiary::query()->count());
 
         $first = Beneficiary::query()->where('last_name', 'LAST1')->firstOrFail();
-        $this->assertSame('FIRST1-MIDDLE-LAST1-0001', $first->beneficiary_code);
+        $this->assertSame('DOLE XII-SCFO-BARMM-'.now()->format('mY').'-00001', $first->beneficiary_code);
         $this->assertSame('DOLE XII -SCFO-BARMM-1507-102026-000001', $first->source_id_number);
         $this->assertNull($first->extension_name, 'N/A extension must become null');
         $this->assertSame('MATILAC', $first->barangay);
@@ -231,6 +241,55 @@ class ImportWorkflowTest extends TestCase
 
         // uploaded file is deleted after successful apply (docs §11)
         Storage::disk('local')->assertMissing($batch->stored_path);
+    }
+
+    public function test_a_row_whose_government_id_already_exists_is_flagged_for_review_instead_of_failing_the_batch(): void
+    {
+        $admin = $this->admin();
+
+        // Someone already registered this government ID on this server; the
+        // workbook row reuses it for a different person.
+        $existing = Beneficiary::factory()->create([
+            'source_id_no' => 'GOV-5001',
+            'first_name' => 'EXISTING',
+            'last_name' => 'PERSON',
+        ]);
+
+        $path = $this->makeWorkbook([
+            $this->sourceRow(5001, [
+                'C' => 'BRANDNEW',
+                'E' => 'OTHERPERSON',
+                'M' => 'GOV-5001',
+            ]),
+            $this->sourceRow(5002),
+        ]);
+
+        $batch = $this->uploadAndPreview($path, $admin);
+
+        // Dry-run flags the collision as a duplicate; the valid row stays new.
+        $collision = $batch->rows()->where('excel_row', 15)->firstOrFail();
+        $this->assertSame('duplicate', $collision->outcome);
+        $this->assertSame('government_id', $collision->duplicate_kind);
+        $this->assertSame($existing->id, $collision->matched_beneficiary_id);
+
+        $summary = $batch->rows()->selectRaw('outcome, COUNT(*) as total')->groupBy('outcome')->pluck('total', 'outcome');
+        $this->assertSame(1, (int) ($summary['duplicate'] ?? 0));
+        $this->assertSame(1, (int) ($summary['new'] ?? 0));
+
+        // The unresolved duplicate is skipped; the valid row is imported and
+        // the batch succeeds instead of aborting.
+        $this->actingAs($admin)->post('/imports/'.$batch->id.'/apply', [
+            'decisions' => ['new' => 'insert', 'update' => 'update', 'duplicate' => 'insert', 'review' => 'skip'],
+            'confirm' => 1,
+        ])->assertRedirect(route('imports.show', $batch))
+            ->assertSessionHas('success');
+
+        $batch->refresh();
+        $this->assertSame('applied', $batch->status);
+        $this->assertSame(1, $batch->inserted);
+        $this->assertSame(1, $batch->skipped);
+        $this->assertSame(1, Beneficiary::query()->where('source_id_no', 'GOV-5001')->count());
+        $this->assertSame('EXISTING', Beneficiary::query()->where('source_id_no', 'GOV-5001')->value('first_name'));
     }
 
     public function test_repeat_import_of_same_file_is_all_unchanged(): void
@@ -258,6 +317,34 @@ class ImportWorkflowTest extends TestCase
         $this->assertSame(0, $batch2->inserted);
         $this->assertSame(0, $batch2->updated);
         $this->assertSame(1, Beneficiary::query()->count());
+    }
+
+    public function test_reimport_moves_matched_rows_into_the_selected_release_batch(): void
+    {
+        $path = $this->makeWorkbook([$this->sourceRow(1)]);
+        $firstBatch = BeneficiaryBatch::factory()->create();
+        $targetBatch = BeneficiaryBatch::factory()->create();
+
+        $batch = $this->uploadAndPreview($path, null, $firstBatch->id);
+        $this->actingAs($this->admin())->post('/imports/'.$batch->id.'/apply', [
+            'decisions' => ['new' => 'insert'],
+            'confirm' => 1,
+        ]);
+
+        $beneficiary = Beneficiary::query()->firstOrFail();
+        $this->assertSame($firstBatch->id, $beneficiary->beneficiary_batch_id);
+
+        $batch2 = $this->uploadAndPreview($path, null, $targetBatch->id);
+        $this->assertSame(1, $batch2->rows()->where('outcome', 'update')->count());
+
+        $this->actingAs($this->admin())->post('/imports/'.$batch2->id.'/apply', [
+            'decisions' => ['update' => 'update'],
+            'confirm' => 1,
+        ]);
+
+        $batch2->refresh();
+        $this->assertSame(1, $batch2->updated);
+        $this->assertSame($targetBatch->id, $beneficiary->refresh()->beneficiary_batch_id);
     }
 
     public function test_modified_copy_produces_updates_and_new_rows(): void
@@ -290,7 +377,7 @@ class ImportWorkflowTest extends TestCase
         $this->assertSame(3, Beneficiary::query()->count());
         $updated = Beneficiary::query()->where('last_name', 'LAST1')->firstOrFail();
         $this->assertSame('FISHERMAN', $updated->occupation);
-        $this->assertSame('FIRST1-MIDDLE-LAST1-0001', $updated->beneficiary_code, 'code must not change on update');
+        $this->assertSame('DOLE XII-SCFO-BARMM-'.now()->format('mY').'-00001', $updated->beneficiary_code, 'code must not change on update');
         $this->assertTrue(
             Beneficiary::query()->where('last_name', 'LAST2')->exists(),
             'rows missing from a re-import must not be deleted',
@@ -376,6 +463,20 @@ class ImportWorkflowTest extends TestCase
         $this->assertFalse(Beneficiary::query()->where('source_id_number', 'DOLE-INV-1')->exists());
     }
 
+    public function test_trailing_apostrophe_in_birthdate_is_accepted(): void
+    {
+        $path = $this->makeWorkbook([
+            $this->sourceRow(1, ['G' => "1991/7/20'"]),
+        ]);
+
+        $batch = $this->uploadAndPreview($path);
+        $row = $batch->rows()->firstOrFail();
+
+        $this->assertSame('new', $row->outcome);
+        $this->assertSame('1991-07-20', $row->payload['birthdate']);
+        $this->assertSame("1991/7/20'", $row->payload['birthdate_raw']);
+    }
+
     public function test_staff_can_preview_but_cannot_apply(): void
     {
         $path = $this->makeWorkbook([$this->sourceRow(1)]);
@@ -444,6 +545,269 @@ class ImportWorkflowTest extends TestCase
             'confirm' => 1,
         ])->assertRedirect(route('imports.show', $batch));
 
+        $this->assertSame(0, Beneficiary::query()->count());
+    }
+
+    public function test_preview_page_shows_structured_import_workflow(): void
+    {
+        $path = $this->makeWorkbook([
+            $this->sourceRow(1),
+            $this->sourceRow(2),
+            $this->sourceRow(3, ['G' => null]),          // missing birthdate → warning
+            $this->sourceRow(4, ['C' => '', 'E' => '']), // missing names → invalid row
+        ]);
+
+        $batch = $this->uploadAndPreview($path);
+
+        $response = $this->actingAs($this->admin())->get(route('imports.show', $batch));
+
+        $response->assertOk()
+            // A. header identity
+            ->assertSee('Import batch #'.$batch->id)
+            ->assertSee('Dry-run complete — awaiting confirmation')
+            ->assertSee('Worksheet')
+            ->assertSee('Header row')
+            ->assertSee('Uploaded by')
+            ->assertSee('Target batch')
+            // B. dry-run banner
+            ->assertSee('Dry-run completed successfully')
+            ->assertSee('No changes have been written to the beneficiaries table')
+            ->assertSee('ready for administrator confirmation')
+            // C. overview hierarchy
+            ->assertSee('Rows read')
+            ->assertSee('New records')
+            ->assertSee('Needs review')
+            ->assertSee('Duplicate candidates')
+            ->assertSee('Invalid rows')
+            // D. decisions + confirmation
+            ->assertSee('Decisions')
+            ->assertSee('I reviewed the import summary and the decisions above')
+            ->assertSee('Confirm the summary above to unlock applying')
+            ->assertSee('name="decisions[new]"', false)
+            ->assertSee('name="decisions[update]"', false)
+            ->assertSee('name="decisions[duplicate]"', false)
+            ->assertSee('name="decisions[review]"', false)
+            ->assertSee('name="confirm"', false)
+            // E. preview table
+            ->assertSee('Excel row')
+            ->assertSee('Beneficiary name')
+            ->assertSee('Age status')
+            ->assertSee('Import outcome')
+            ->assertSee('Validation / warnings')
+            ->assertSee('Matched / candidates')
+            // Validation summary for recurring file notes, in plain language
+            ->assertSee('Recurring validation notes in this file')
+            ->assertSee('It is kept exactly as written in the file; review it when editing the record.')
+            ->assertSee('This row has no birthdate. It needs review before the record is used.');
+
+        // Counts rendered on the page are exactly the backend aggregation.
+        $backendSummary = $batch->rows()
+            ->selectRaw('outcome, COUNT(*) as total')
+            ->groupBy('outcome')
+            ->pluck('total', 'outcome');
+
+        $this->assertSame($backendSummary->all(), $response->viewData('summary')->all());
+
+        // Dry-run must never write beneficiaries.
+        $this->assertSame(0, Beneficiary::query()->count(), 'preview must not write beneficiaries');
+    }
+
+    public function test_apply_requires_the_confirmation_checkbox(): void
+    {
+        $path = $this->makeWorkbook([$this->sourceRow(1)]);
+        $batch = $this->uploadAndPreview($path);
+
+        $this->actingAs($this->admin())
+            ->from(route('imports.show', $batch))
+            ->post('/imports/'.$batch->id.'/apply', [
+                'decisions' => ['new' => 'insert', 'update' => 'update', 'duplicate' => 'skip', 'review' => 'skip'],
+            ])
+            ->assertRedirect(route('imports.show', $batch))
+            ->assertSessionHasErrors('confirm');
+
+        $this->assertSame('previewed', $batch->refresh()->status);
+        $this->assertSame(0, Beneficiary::query()->count());
+    }
+
+    public function test_applied_batch_page_reports_applied_state(): void
+    {
+        $path = $this->makeWorkbook([$this->sourceRow(1)]);
+        $batch = $this->uploadAndPreview($path);
+
+        $this->actingAs($this->admin())->post('/imports/'.$batch->id.'/apply', [
+            'decisions' => ['new' => 'insert', 'update' => 'update', 'duplicate' => 'skip', 'review' => 'skip'],
+            'confirm' => 1,
+        ])->assertRedirect(route('imports.show', $batch));
+
+        $this->actingAs($this->admin())->get(route('imports.show', $batch))
+            ->assertOk()
+            ->assertSee('Applied.')
+            ->assertSee('1 inserted')
+            ->assertSee('Browse beneficiaries');
+    }
+
+    public function test_cancelled_batch_page_reports_cancelled_state(): void
+    {
+        $path = $this->makeWorkbook([$this->sourceRow(1)]);
+        $batch = $this->uploadAndPreview($path);
+
+        $this->actingAs($this->admin())->post('/imports/'.$batch->id.'/cancel')
+            ->assertRedirect(route('imports.index'));
+
+        $this->actingAs($this->admin())->get(route('imports.show', $batch))
+            ->assertOk()
+            ->assertSee('This batch was cancelled; the uploaded file was deleted.')
+            ->assertSee('Cancelled');
+    }
+
+    public function test_reimport_preview_shows_unchanged_rows(): void
+    {
+        $path = $this->makeWorkbook([$this->sourceRow(1), $this->sourceRow(2)]);
+
+        $first = $this->uploadAndPreview($path);
+        $this->actingAs($this->admin())->post('/imports/'.$first->id.'/apply', [
+            'decisions' => ['new' => 'insert', 'update' => 'update', 'duplicate' => 'skip', 'review' => 'skip'],
+            'confirm' => 1,
+        ])->assertRedirect(route('imports.show', $first));
+
+        $second = $this->uploadAndPreview($path);
+        $response = $this->actingAs($this->admin())->get(route('imports.show', $second));
+
+        $response->assertOk()->assertSee('Unchanged');
+
+        $summary = $response->viewData('summary');
+        $this->assertSame(2, (int) ($summary['unchanged'] ?? 0));
+        $this->assertSame(0, (int) ($summary['new'] ?? 0));
+    }
+
+    public function test_import_page_shows_profiling_date_picker_defaulting_to_today(): void
+    {
+        $this->actingAs($this->staff())->get('/imports/create')
+            ->assertOk()
+            ->assertSee('Beneficiary Profiling Date')
+            ->assertSee('This date will be used for monthly and yearly dashboard reporting.')
+            ->assertSee('name="profiling_date"', false)
+            ->assertSee('value="'.now()->toDateString().'"', false);
+    }
+
+    public function test_invalid_profiling_date_is_rejected(): void
+    {
+        $path = $this->makeWorkbook([$this->sourceRow(1)]);
+
+        $response = $this->upload($this->staff(), $path, null, 'not-a-date');
+
+        $response->assertSessionHasErrors('profiling_date');
+        $this->assertSame(0, ImportBatch::query()->count());
+    }
+
+    public function test_selected_profiling_date_is_stored_and_shown_through_preview(): void
+    {
+        $path = $this->makeWorkbook([$this->sourceRow(1)]);
+
+        $this->upload($this->staff(), $path, null, '2026-10-26')->assertSessionHasNoErrors();
+        $batch = ImportBatch::query()->latest('id')->firstOrFail();
+
+        $this->assertSame('2026-10-26', $batch->profiling_date?->toDateString());
+
+        // Preserved when returning to the mapping step.
+        $this->actingAs($this->staff())->get(route('imports.edit', $batch))
+            ->assertOk()
+            ->assertSee('Beneficiary profiling date:')
+            ->assertSee('October 26, 2026');
+
+        $batch = $this->uploadAndPreview($path, null, null, '2025-03-15');
+
+        $this->actingAs($this->admin())->get(route('imports.show', $batch))
+            ->assertOk()
+            ->assertSee('Beneficiary profiling date')
+            ->assertSee('March 15, 2025')
+            ->assertSee('recorded under')
+            ->assertSee('March 2025')
+            ->assertSee('Profiling date:');
+    }
+
+    public function test_apply_records_the_profiling_date_and_feeds_the_dashboard_trend(): void
+    {
+        $path = $this->makeWorkbook([$this->sourceRow(1), $this->sourceRow(2)]);
+
+        $batch = $this->uploadAndPreview($path, null, null, '2025-03-15');
+
+        $this->actingAs($this->admin())->post('/imports/'.$batch->id.'/apply', [
+            'decisions' => ['new' => 'insert', 'update' => 'update', 'duplicate' => 'skip', 'review' => 'skip'],
+            'confirm' => 1,
+        ])->assertRedirect(route('imports.show', $batch));
+
+        $this->assertSame(2, Beneficiary::query()->whereDate('profiled_on', '2025-03-15')->count());
+
+        $trend = $this->actingAs($this->admin())->get('/dashboard')->viewData('registrationTrend');
+
+        $this->assertSame(2, $trend['months'][2025][3]);
+        $this->assertSame(2, $trend['annual'][2025]);
+        $this->assertSame(0, $trend['months'][now()->year][now()->month]);
+    }
+
+    public function test_update_does_not_overwrite_an_existing_profiling_date(): void
+    {
+        $path = $this->makeWorkbook([$this->sourceRow(1, ['U' => 2000])]);
+        $first = $this->uploadAndPreview($path, null, null, '2025-03-15');
+
+        $this->actingAs($this->admin())->post('/imports/'.$first->id.'/apply', [
+            'decisions' => ['new' => 'insert', 'update' => 'update', 'duplicate' => 'skip', 'review' => 'skip'],
+            'confirm' => 1,
+        ])->assertRedirect(route('imports.show', $first));
+
+        $beneficiary = Beneficiary::query()->firstOrFail();
+        $this->assertSame('2025-03-15', $beneficiary->profiled_on?->toDateString());
+
+        // A later import updates the record (income changed) with a different
+        // profiling date; the original profiling date must be preserved.
+        $changed = $this->makeWorkbook([$this->sourceRow(1, ['U' => 4000])]);
+        $second = $this->uploadAndPreview($changed, null, null, '2024-06-01');
+
+        $this->actingAs($this->admin())->post('/imports/'.$second->id.'/apply', [
+            'decisions' => ['new' => 'insert', 'update' => 'update', 'duplicate' => 'skip', 'review' => 'skip'],
+            'confirm' => 1,
+        ])->assertRedirect(route('imports.show', $second));
+
+        $beneficiary->refresh();
+        $this->assertSame('2025-03-15', $beneficiary->profiled_on?->toDateString());
+        $this->assertSame('4000.00', (string) $beneficiary->avg_monthly_income);
+    }
+
+    public function test_update_fills_a_missing_profiling_date(): void
+    {
+        $factoryBeneficiary = Beneficiary::factory()->create([
+            'first_name' => 'FIRST1',
+            'last_name' => 'LAST1',
+            'source_id_number' => 'DOLE XII -SCFO-BARMM-1507-102026-000001',
+            'source_id_no' => 'GOV-0001',
+            'profiled_on' => null,
+        ]);
+
+        $path = $this->makeWorkbook([$this->sourceRow(1, ['U' => 9999])]);
+        $batch = $this->uploadAndPreview($path, null, null, '2024-09-09');
+
+        $summary = $batch->rows()->pluck('outcome', 'excel_row');
+        $this->assertSame('update', $summary->first());
+
+        $this->actingAs($this->admin())->post('/imports/'.$batch->id.'/apply', [
+            'decisions' => ['new' => 'insert', 'update' => 'update', 'duplicate' => 'skip', 'review' => 'skip'],
+            'confirm' => 1,
+        ])->assertRedirect(route('imports.show', $batch));
+
+        $factoryBeneficiary->refresh();
+        $this->assertSame('2024-09-09', $factoryBeneficiary->profiled_on?->toDateString());
+    }
+
+    public function test_cancelled_import_does_not_touch_beneficiary_profiling_dates(): void
+    {
+        $path = $this->makeWorkbook([$this->sourceRow(1)]);
+        $batch = $this->uploadAndPreview($path, null, null, '2023-01-10');
+
+        $this->actingAs($this->admin())->post('/imports/'.$batch->id.'/cancel')
+            ->assertRedirect(route('imports.index'));
+
+        $this->assertSame('cancelled', $batch->refresh()->status);
         $this->assertSame(0, Beneficiary::query()->count());
     }
 }

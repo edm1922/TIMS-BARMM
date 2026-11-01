@@ -47,7 +47,7 @@ class LoginController extends Controller
             AuditLogger::log('auth.login_failed', metadata: ['username' => $loginInput]);
 
             throw ValidationException::withMessages([
-                'username' => 'Invalid credentials or inactive account.',
+                'username' => 'Invalid username or password. Please try again.',
             ]);
         }
 

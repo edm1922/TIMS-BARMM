@@ -3,6 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\PreparesBeneficiaryInput;
+use App\Rules\PhilippinePhoneNumber;
+use App\Support\BeneficiaryOptions;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -16,7 +18,7 @@ class StoreBeneficiaryRequest extends FormRequest
     }
 
     /**
-     * @return array<string, array<int, string>>
+     * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
@@ -36,7 +38,7 @@ class StoreBeneficiaryRequest extends FormRequest
             'id_type_other' => ['nullable', 'string', 'max:100'],
             'source_id_no' => ['required', 'string', 'max:64'],
             'cos_no' => ['nullable', 'string', 'max:100'],
-            'contact_no' => ['required', 'string', 'max:20'],
+            'contact_no' => ['required', 'string', 'max:20', new PhilippinePhoneNumber],
 
             'beneficiary_type' => ['required', 'string', 'max:100'],
             'beneficiary_signify' => ['required', 'string', 'max:100'],
@@ -48,7 +50,8 @@ class StoreBeneficiaryRequest extends FormRequest
             'civil_status' => ['required', 'in:SINGLE,MARRIED,WIDOW,WIDOWED,SEPARATED,DIVORCED'],
             'avg_monthly_income' => ['required', 'numeric', 'min:0'],
             'dependent_name' => ['required', 'string', 'max:150'],
-            'dependent_contact_no' => ['required', 'string', 'max:20'],
+            'dependent_contact_no' => ['required', 'string', 'max:20', new PhilippinePhoneNumber],
+            'employment_interest' => ['nullable', 'string', 'in:YES,NO'],
             'skills_training_needed' => ['nullable', 'string', 'max:150'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ] + $this->addressRule(allowLegacy: false);
@@ -113,7 +116,18 @@ class StoreBeneficiaryRequest extends FormRequest
             'mode_of_payment' => $this->normalizeUpper($this->input('mode_of_payment')),
             'dependent_name' => $this->normalizeUpper($this->input('dependent_name')),
             'dependent_contact_no' => $this->trimOrNull('dependent_contact_no'),
+            'employment_interest' => $this->normalizeUpper($this->input('employment_interest')),
             'skills_training_needed' => $this->normalizeUpper($this->input('skills_training_needed')),
+        ]);
+
+        // Store the Government ID No. in the known format for its ID type, so
+        // entries match whether or not the operator's browser applied the
+        // live mask.
+        $this->merge([
+            'source_id_no' => BeneficiaryOptions::formatIdNumber(
+                $this->input('id_type'),
+                $this->input('source_id_no'),
+            ),
         ]);
     }
 

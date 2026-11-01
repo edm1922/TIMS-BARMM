@@ -26,6 +26,11 @@ class BeneficiaryRegistrationTest extends TestCase
             ->assertSee('id="duplicateCheckVerify"', false)
             ->assertSee(route('beneficiaries.duplicate-check'), false)
             ->assertSee('id="beneficiaryForm"', false)
+            ->assertSee('data-ph-phone', false)
+            ->assertSee('data-phone-hint', false)
+            ->assertSee('name="employment_interest"', false)
+            ->assertSee('data-bs-backdrop="static"', false)
+            ->assertSee('data-bs-keyboard="false"', false)
             ->assertSee('Registration Batch')
             ->assertDontSee('Continue registration');
     }
@@ -100,6 +105,23 @@ class BeneficiaryRegistrationTest extends TestCase
             ->assertJsonValidationErrors(['last_name', 'birthdate']);
     }
 
+    public function test_contact_number_must_be_a_valid_philippine_number(): void
+    {
+        $location = $this->seededLocation();
+        $batch = $this->seededBatch(['name' => 'Phone Validation Batch']);
+
+        $this->actingAs($this->staff())
+            ->from('/batches/'.$batch->id.'/beneficiaries/create')
+            ->post('/batches/'.$batch->id.'/beneficiaries', $this->beneficiaryPayload($location, [
+                'first_name' => 'INVALID',
+                'last_name' => 'PHONE',
+                'contact_no' => '0917123456',
+            ]))
+            ->assertSessionHasErrors('contact_no');
+
+        $this->assertSame(0, Beneficiary::query()->count());
+    }
+
     public function test_duplicate_check_does_not_create_records(): void
     {
         $this->actingAs($this->staff())->postJson('/beneficiaries/duplicate-check', [
@@ -116,20 +138,17 @@ class BeneficiaryRegistrationTest extends TestCase
         $location = $this->seededLocation();
         $batch = $this->seededBatch(['name' => 'Uppercase Batch']);
 
-        $this->actingAs($this->staff())->post('/batches/'.$batch->id.'/beneficiaries', [
+        $this->actingAs($this->staff())->post('/batches/'.$batch->id.'/beneficiaries', $this->beneficiaryPayload($location, [
             'first_name' => '  maria  ',
             'middle_name' => 'santos',
             'last_name' => 'reyes',
             'extension_name' => 'jr',
             'birthdate' => '1996-07-22',
-            'address' => $location->full_address,
-            'location_code' => $location->psgc_code,
             'occupation' => 'vendor',
             'beneficiary_signify' => 'skills training',
             'beneficiary_type' => 'senior citizen',
             'mode_of_payment' => 'bank',
-            'duplicate_check_done' => '1',
-        ]);
+        ]));
 
         $beneficiary = Beneficiary::query()->firstOrFail();
 
@@ -145,22 +164,52 @@ class BeneficiaryRegistrationTest extends TestCase
         $this->assertSame($batch->id, $beneficiary->beneficiary_batch_id);
     }
 
+    public function test_employment_interest_is_saved_from_registration(): void
+    {
+        $location = $this->seededLocation();
+        $batch = $this->seededBatch(['name' => 'Employment Interest Batch']);
+
+        $this->actingAs($this->staff())->post('/batches/'.$batch->id.'/beneficiaries', $this->beneficiaryPayload($location, [
+            'first_name' => 'INTEREST',
+            'last_name' => 'CHECK',
+            'employment_interest' => 'YES',
+        ]));
+
+        $beneficiary = Beneficiary::query()->firstOrFail();
+
+        $this->assertSame('YES', $beneficiary->employment_interest);
+    }
+
+    public function test_employment_interest_must_be_yes_or_no(): void
+    {
+        $location = $this->seededLocation();
+        $batch = $this->seededBatch(['name' => 'Employment Interest Validation Batch']);
+
+        $this->actingAs($this->staff())
+            ->from('/batches/'.$batch->id.'/beneficiaries/create')
+            ->post('/batches/'.$batch->id.'/beneficiaries', $this->beneficiaryPayload($location, [
+                'first_name' => 'INVALID',
+                'last_name' => 'INTEREST',
+                'employment_interest' => 'MAYBE',
+            ]))
+            ->assertSessionHasErrors('employment_interest');
+
+        $this->assertSame(0, Beneficiary::query()->count());
+    }
+
     public function test_store_keeps_other_detail_and_composes_labels(): void
     {
         $location = $this->seededLocation();
         $batch = $this->seededBatch(['name' => 'Other Detail Batch']);
 
-        $this->actingAs($this->staff())->post('/batches/'.$batch->id.'/beneficiaries', [
+        $this->actingAs($this->staff())->post('/batches/'.$batch->id.'/beneficiaries', $this->beneficiaryPayload($location, [
             'first_name' => 'OTHER',
             'last_name' => 'DETAIL',
-            'address' => $location->full_address,
-            'location_code' => $location->psgc_code,
             'occupation' => 'OTHER',
             'occupation_other' => 'street sweeper',
             'id_type' => 'OTHERS',
             'id_type_other' => 'company id',
-            'duplicate_check_done' => '1',
-        ]);
+        ]));
 
         $beneficiary = Beneficiary::query()->firstOrFail();
 
@@ -181,13 +230,11 @@ class BeneficiaryRegistrationTest extends TestCase
         ]);
         $batch = $this->seededBatch(['name' => 'Address Batch']);
 
-        $this->actingAs($this->staff())->post('/batches/'.$batch->id.'/beneficiaries', [
+        $this->actingAs($this->staff())->post('/batches/'.$batch->id.'/beneficiaries', $this->beneficiaryPayload($location, [
             'first_name' => 'ADDRESS',
             'last_name' => 'CHECK',
             'address' => 'something the user typed',
-            'location_code' => $location->psgc_code,
-            'duplicate_check_done' => '1',
-        ]);
+        ]));
 
         $beneficiary = Beneficiary::query()->firstOrFail();
 
@@ -263,5 +310,68 @@ class BeneficiaryRegistrationTest extends TestCase
             ->assertSee('LIVELIHOOD ASSISTANCE')
             ->assertSee('DISKARTECH')
             ->assertDontSee('ePayment account');
+    }
+
+    public function test_the_registration_page_is_organized_into_sections_with_a_sticky_submission_bar(): void
+    {
+        $batch = $this->seededBatch(['name' => 'Sectioned Registration Batch']);
+
+        $response = $this->actingAs($this->staff())->get('/batches/'.$batch->id.'/beneficiaries/create')
+            ->assertOk()
+            ->assertSee('Add Beneficiary')
+            ->assertSee('Register a new beneficiary under the selected batch.')
+            ->assertSee('data-reg-section="identity"', false)
+            ->assertSee('data-reg-section="address"', false)
+            ->assertSee('data-reg-section="identification"', false)
+            ->assertSee('data-reg-section="employment"', false)
+            ->assertSee('data-reg-section="additional"', false)
+            ->assertSee('Identity information')
+            ->assertSee('Address information')
+            ->assertSee('Identification &amp; contact', false)
+            ->assertSee('Employment &amp; assistance', false)
+            ->assertSee('Additional information')
+            ->assertSee('data-reg-progress-count', false)
+            ->assertSee('reg-actions-bar')
+            ->assertSee('id="beneficiarySubmit"', false)
+            ->assertSee('id="age_display"', false)
+            ->assertSee('readonly', false)
+            ->assertSee('data-age-display', false)
+            ->assertSee('Verify beneficiary')
+            ->assertSee('Back to batch');
+
+        // Every original form control must still be submitted under the same name.
+        foreach ([
+            'first_name', 'middle_name', 'last_name', 'extension_name', 'birthdate', 'sex', 'civil_status',
+            'address', 'location_code', 'id_type', 'source_id_no', 'cos_no', 'contact_no',
+            'beneficiary_type', 'beneficiary_signify', 'occupation', 'mode_of_payment', 'avg_monthly_income',
+            'dependent_name', 'dependent_contact_no', 'employment_interest', 'skills_training_needed',
+            'duplicate_check_done',
+        ] as $field) {
+            $response->assertSee('name="'.$field.'"', false);
+        }
+    }
+
+    public function test_a_success_modal_is_shown_after_creating_a_beneficiary(): void
+    {
+        $location = $this->seededLocation();
+        $batch = $this->seededBatch(['name' => 'Success Modal Batch']);
+
+        $this->actingAs($this->staff())->post('/batches/'.$batch->id.'/beneficiaries', $this->beneficiaryPayload($location, [
+            'first_name' => 'SUCCESS',
+            'last_name' => 'MODAL',
+        ]))->assertRedirect(route('beneficiary-batches.show', $batch));
+
+        $beneficiary = Beneficiary::query()->firstOrFail();
+
+        $this->actingAs($this->staff())->get(route('beneficiary-batches.show', $batch))
+            ->assertOk()
+            ->assertSee('id="beneficiaryCreatedModal"', false)
+            ->assertSee('Beneficiary created')
+            ->assertSee($beneficiary->full_name)
+            ->assertSee($beneficiary->beneficiary_code)
+            ->assertSee('Success Modal Batch')
+            ->assertSee('View beneficiary')
+            ->assertSee('Add another')
+            ->assertSee('beneficiaryCreatedModal');
     }
 }

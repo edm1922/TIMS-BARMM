@@ -64,8 +64,9 @@
 
 .app-sidebar-brand {
     display: flex;
-    flex-direction: column;
-    gap: .2rem;
+    flex-direction: row;
+    align-items: center;
+    gap: .75rem;
     padding: 1.25rem 1.25rem 1rem;
     color: #fff;
     font-size: 1.05rem;
@@ -74,6 +75,20 @@
     letter-spacing: .01em;
     text-decoration: none;
     border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.app-sidebar-brand-logo {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    flex: 0 0 auto;
+}
+
+.app-sidebar-brand-copy {
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    min-width: 0;
 }
 
 .app-sidebar-brand:hover,
@@ -96,6 +111,26 @@
     min-height: 0;
     overflow-y: auto;
     padding: .85rem .75rem 1rem;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* old Edge/IE */
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+}
+
+/* Keep the sidebar scrollable without showing a scrollbar track. */
+.app-sidebar,
+.app-sidebar-inner,
+.app-nav {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.app-sidebar::-webkit-scrollbar,
+.app-sidebar-inner::-webkit-scrollbar,
+.app-nav::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
 }
 
 .app-nav .nav {
@@ -213,6 +248,13 @@
 
 .app-topbar-title {
     font-weight: 600;
+}
+
+.app-topbar-logo {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    flex: 0 0 auto;
 }
 
 .app-topbar-user {
@@ -1030,3 +1072,491 @@ a.dq-item:hover {
     }
 }
 
+/* =============================================================
+   Enterprise sidebar refinement
+   Graphite-navy surface, tighter navigation, blue active state.
+   Appended after the shell rules so it overrides the originals.
+   ============================================================= */
+
+.app-sidebar-wrapper {
+    flex: 0 0 236px;
+    width: 236px;
+    max-width: 236px;
+    background: #172235;
+}
+
+.app-sidebar {
+    --bs-offcanvas-bg: #172235;
+}
+
+.app-sidebar-inner {
+    background: #172235;
+}
+
+.app-sidebar-brand {
+    padding: 1.15rem 1.15rem .95rem;
+    font-size: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, .07);
+}
+
+.app-sidebar-brand small {
+    font-size: .66rem;
+    letter-spacing: .06em;
+}
+
+.app-nav {
+    padding: .75rem .7rem 1rem;
+}
+
+.app-nav .nav {
+    gap: .2rem;
+}
+
+.app-nav .nav-link {
+    padding: .58rem .7rem;
+    border-radius: .55rem;
+    gap: .6rem;
+    font-size: .9rem;
+    font-weight: 500;
+}
+
+.app-nav .nav-link.active {
+    background: #2563eb;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .18);
+}
+
+.app-nav .nav-link.active:hover,
+.app-nav .nav-link.active:focus {
+    background: #1d4ed8;
+}
+
+.app-nav-icon {
+    width: 15px;
+    height: 15px;
+}
+
+.app-sidebar-footer {
+    padding: .9rem 1.1rem 1.1rem;
+    background: #131c2a;
+}
+
+
+/* =============================================================
+   Global sidebar navigation — enterprise shell refresh.
+   Expanded 232px, collapsed 68px, fixed branding/navigation/footer.
+   ============================================================= */
+
+@media (min-width: 992px) {
+    .app-sidebar-wrapper {
+        flex: 0 0 232px;
+        width: 232px;
+        max-width: 232px;
+        transition: flex-basis .18s ease, width .18s ease, max-width .18s ease;
+    }
+}
+
+.app-sidebar-inner { background: #172337; }
+
+.app-sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: 1rem 1rem .85rem;
+    font-size: .94rem;
+    font-weight: 700;
+    line-height: 1.2;
+    border-bottom: 1px solid rgba(255, 255, 255, .08);
+    min-height: 64px;
+}
+
+.app-sidebar-brand-logo {
+    width: 36px;
+    height: 36px;
+    max-width: 36px;
+    max-height: 36px;
+}
+
+.app-sidebar-brand-copy { gap: 2px; overflow: hidden; }
+
+.app-sidebar-brand-copy > :first-child {
+    font-size: .9rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.app-sidebar-brand small {
+    font-size: .56rem;
+    line-height: 1.25;
+    letter-spacing: .085em;
+    color: #94a3b8;
+    white-space: normal;
+}
+
+.app-nav { padding: .7rem .6rem .85rem; }
+.app-nav .nav { gap: 3px; }
+
+.app-nav .nav-link {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    min-height: 38px;
+    padding: .5rem .65rem;
+    border-radius: .45rem;
+    color: #cbd5e1;
+    font-size: .85rem;
+    font-weight: 500;
+    line-height: 1.25;
+    transition: background-color .16s ease, color .16s ease, box-shadow .16s ease;
+}
+
+.app-nav .nav-link > span:not(.badge) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-nav .nav-link:hover {
+    background: rgba(255, 255, 255, .07);
+    color: #f8fafc;
+}
+
+.app-nav .nav-link:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 2px;
+}
+
+.app-nav .nav-link.active {
+    background: #2563eb;
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .22), inset 3px 0 0 rgba(255, 255, 255, .9);
+}
+
+.app-nav .nav-link.active:hover,
+.app-nav .nav-link.active:focus {
+    background: #1d4ed8;
+    color: #fff;
+}
+
+.app-nav-icon {
+    width: 16px;
+    height: 16px;
+    color: #94a3b8;
+    flex: 0 0 auto;
+}
+
+.app-nav .nav-link:hover .app-nav-icon { color: #e2e8f0; }
+.app-nav .nav-link.active .app-nav-icon { color: #fff; }
+
+.app-nav .nav-link .badge {
+    margin-left: auto;
+    font-size: .66rem;
+    line-height: 1.1;
+    padding: .22em .45em;
+}
+
+/* Fixed account footer ------------------------------------------------ */
+.app-sidebar-footer {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: .75rem .8rem .85rem;
+    background: #131c2a;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+}
+
+.app-sidebar-collapse {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: .45rem;
+    width: 100%;
+    min-height: 34px;
+    padding: 0 .55rem;
+    border: 1px solid rgba(255, 255, 255, .14);
+    border-radius: 7px;
+    background: transparent;
+    color: #cbd5e1;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+
+.app-sidebar-collapse:hover {
+    background: rgba(255, 255, 255, .08);
+    border-color: rgba(255, 255, 255, .28);
+    color: #fff;
+}
+
+.app-sidebar-collapse:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 2px;
+}
+
+.theme-toggle {
+    min-height: 36px;
+    padding: 0 .55rem;
+    margin-bottom: 0;
+    background: transparent;
+    border-color: rgba(255, 255, 255, .14);
+    font-size: 12px;
+}
+
+.app-sidebar-user {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: .55rem;
+    margin: .15rem 0 .2rem;
+}
+
+.app-sidebar-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: #2563eb;
+    color: #fff;
+    font-size: .78rem;
+    font-weight: 700;
+}
+
+.app-sidebar-user-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.app-sidebar-user-name {
+    color: #f8fafc;
+    font-size: .82rem;
+    font-weight: 600;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-sidebar-footer .badge {
+    align-self: flex-start;
+    font-size: .62rem;
+    font-weight: 500;
+    padding: .24em .5em;
+}
+
+.app-sidebar-footer .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .45rem;
+    min-height: 36px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 500;
+}
+
+/* Collapsed sidebar (desktop only) ----------------------------------- */
+@media (min-width: 992px) {
+    html[data-sidebar="collapsed"] .app-sidebar-wrapper {
+        flex: 0 0 68px;
+        width: 68px;
+        max-width: 68px;
+    }
+
+    html[data-sidebar="collapsed"] .app-sidebar-brand {
+        justify-content: center;
+        padding: .9rem .4rem .8rem;
+        min-height: 60px;
+    }
+
+    html[data-sidebar="collapsed"] .app-sidebar-brand-copy { display: none; }
+
+    html[data-sidebar="collapsed"] .app-sidebar-brand-logo {
+        width: 30px;
+        height: 30px;
+        max-width: 30px;
+        max-height: 30px;
+    }
+
+    html[data-sidebar="collapsed"] .app-nav { padding: .65rem .4rem .8rem; }
+
+    html[data-sidebar="collapsed"] .app-nav .nav-link {
+        justify-content: center;
+        gap: 0;
+        padding: .55rem .25rem;
+        min-height: 38px;
+    }
+
+    html[data-sidebar="collapsed"] .app-nav .nav-link > span { display: none; }
+    html[data-sidebar="collapsed"] .app-nav .nav-link .badge { display: none; }
+    html[data-sidebar="collapsed"] .app-nav-icon { width: 17px; height: 17px; }
+
+    html[data-sidebar="collapsed"] .app-nav .nav-link.active {
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .22);
+    }
+
+    html[data-sidebar="collapsed"] .app-sidebar-footer {
+        align-items: center;
+        padding: .7rem .45rem .8rem;
+        gap: 7px;
+    }
+
+    html[data-sidebar="collapsed"] .app-sidebar-collapse {
+        justify-content: center;
+        padding: 0;
+        min-height: 34px;
+    }
+
+    html[data-sidebar="collapsed"] .app-sidebar-collapse span,
+    html[data-sidebar="collapsed"] .theme-toggle [data-theme-label] {
+        display: none;
+    }
+
+    html[data-sidebar="collapsed"] .theme-toggle {
+        justify-content: center;
+        width: 36px;
+        padding: 0;
+    }
+
+    html[data-sidebar="collapsed"] .app-sidebar-user {
+        justify-content: center;
+        margin: 0;
+    }
+
+    html[data-sidebar="collapsed"] .app-sidebar-user-copy { display: none; }
+
+    html[data-sidebar="collapsed"] .app-sidebar-avatar {
+        width: 30px;
+        height: 30px;
+    }
+
+    html[data-sidebar="collapsed"] .app-sidebar-footer form { width: 100%; }
+
+    html[data-sidebar="collapsed"] .app-sidebar-footer form .btn {
+        width: 36px;
+        min-height: 34px;
+        margin: 0 auto;
+        padding: 0;
+    }
+
+    html[data-sidebar="collapsed"] .app-sidebar-footer form .btn span { display: none; }
+
+    html[data-sidebar="collapsed"] .app-sidebar-collapse-icon { transform: rotate(180deg); }
+
+    html[data-sidebar="collapsed"] .app-nav .nav-link { position: relative; }
+
+    html[data-sidebar="collapsed"] .app-nav .nav-link.active::before {
+        content: "";
+        position: absolute;
+        left: -0.4rem;
+        top: 50%;
+        width: 3px;
+        height: 20px;
+        margin-top: -10px;
+        border-radius: 0 3px 3px 0;
+        background: #2563eb;
+    }
+}
+
+
+/* The collapse control is desktop-only; mobile uses the off-canvas drawer. */
+@media (max-width: 991.98px) {
+    .app-sidebar-collapse {
+        display: none;
+    }
+}
+
+
+/* Edge collapse handle: clipped on the sidebar's right border ------------- */
+@media (min-width: 992px) {
+    .app-sidebar-wrapper {
+        position: sticky;
+    }
+
+    .app-sidebar-edge-toggle {
+        position: absolute;
+        top: 50%;
+        right: -13px;
+        z-index: 20;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 46px;
+        padding: 0;
+        transform: translateY(-50%);
+        border: 1px solid rgba(255, 255, 255, .16);
+        border-left: 0;
+        border-radius: 0 8px 8px 0;
+        background: #1f2d45;
+        color: #cbd5e1;
+        box-shadow: 4px 0 10px rgba(15, 23, 42, .22);
+        cursor: pointer;
+        transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+    }
+
+    .app-sidebar-edge-toggle:hover {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #fff;
+    }
+
+    .app-sidebar-edge-toggle:focus-visible {
+        outline: 2px solid #93c5fd;
+        outline-offset: 2px;
+    }
+
+    .app-sidebar-edge-toggle-icon {
+        flex: 0 0 auto;
+        transition: transform .18s ease;
+    }
+
+    html[data-sidebar="collapsed"] .app-sidebar-edge-toggle-icon {
+        transform: rotate(180deg);
+    }
+
+    html[data-sidebar="collapsed"] .app-sidebar-edge-toggle {
+        right: -13px;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .app-sidebar-edge-toggle {
+        display: none;
+    }
+}
+
+
+/* Branding subtitle: always show the full department name ----------------- */
+.app-sidebar-brand {
+    gap: .55rem;
+    padding-left: .85rem;
+    padding-right: .75rem;
+}
+
+.app-sidebar-brand-copy {
+    overflow: visible;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.app-sidebar-brand-subtitle {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    font-size: .58rem;
+    line-height: 1.45;
+    letter-spacing: .045em;
+    color: #94a3b8;
+    overflow-wrap: break-word;
+}

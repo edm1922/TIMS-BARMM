@@ -56,6 +56,18 @@ controller (`Gate::authorize`), never only in Blade.
   per-row outcomes remain.
 - Audit entries contain minimal metadata — no passwords, tokens, or full row
   dumps. Access to the audit log is admin-only.
+- Every audit entry carries a stable event identifier, the actor identity
+  (uuid, username, role), and the installation that produced it.
+- Audit entries written on an offline installation stay on the device and are
+  synchronized to the central server with the next sync. The central copy keeps
+  the same actor and origin, and no credential or personal contact detail is
+  ever included.
+- Encoder accounts are reported to the central server as a read-only identity
+  registry (uuid, username, display name, role, active). Passwords, email
+  addresses, and contact details never leave the device.
+- Installation packages exclude `.env`, keys, logs, backups, generated caches,
+  and git history; each package ships a SHA-256 manifest that the setup script
+  verifies before installing.
 - Tests use fabricated data only; the real workbook is never modified and is
   excluded from version control where required.
 
@@ -73,6 +85,9 @@ Actions currently audited (`audit_logs.action`):
 | `import.applied`, `import.failed`, `import.cancelled` | import outcome (per-row detail in `import_rows`) |
 | `id_card.printed` | single/batch card printing |
 | `export.csv`, `export.xlsx` | download of report data (format, filters, count) |
+| `encoder.created`, `encoder.updated`, `encoder.deactivated` | field encoder account management |
+| `offline_installation.package_generated`, `offline_installation.package_downloaded`, `offline_installation.package_deleted` | installation package handling |
+| `offline_server.reauthorized` | reauthorization of an installation |
 
 ## 5. Deployment hardening (production)
 

@@ -34,16 +34,25 @@ class BeneficiaryPolicy
 
     public function archive(User $user, Beneficiary $beneficiary): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin() || $user->isManager();
     }
 
     public function unarchive(User $user, Beneficiary $beneficiary): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin() || $user->isManager();
+    }
+
+    /**
+     * Deleting a beneficiary is destructive and irreversible. Managers may
+     * delete after the typed-ID confirmation; staff remain unable to delete.
+     */
+    public function delete(User $user, Beneficiary $beneficiary): bool
+    {
+        return $user->isAdmin() || $user->isManager();
     }
 
     public function resolveDuplicate(User $user, Beneficiary $beneficiary): bool
     {
-        return $user->isAdmin();
+        return $user->isAdmin() || $user->isManager();
     }
 }
