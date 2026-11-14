@@ -5,6 +5,7 @@
 @section('content')
 <div class="sync-console">
     @include('partials.sync-console-styles')
+    @include('partials.server-management-tabs')
 
     <style>
         .sync-console .sync-filter-grid { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 14px 20px; }
@@ -20,7 +21,7 @@
             <h1 class="sync-page-title">Pending Sync Requests</h1>
             <p class="sync-page-subtitle">
                 Every Sync Now submission from an offline server. Records that could be applied safely were applied
-                on receipt; duplicates, conflicts, and invalid records are decided in the Review inbox.
+                on receipt; duplicates, conflicts, and invalid records are decided in the Review Queue.
             </p>
             <div class="sync-meta">
                 <span>{{ number_format($counts['pending']) }} awaiting review</span>
@@ -30,7 +31,12 @@
             </div>
         </div>
         <div class="sync-page-actions">
-            <a class="sync-btn sync-btn--primary" href="{{ route('review-inbox.index') }}">Review inbox</a>
+            <a class="sync-btn sync-btn--primary" href="{{ route('review-inbox.index') }}">
+                Review pending records
+                @if ($counts['pending_records'] > 0)
+                    <span class="badge text-bg-light border ms-1">{{ number_format($counts['pending_records']) }}</span>
+                @endif
+            </a>
             <a class="sync-btn sync-btn--secondary" href="{{ route('sync-servers.index') }}">Offline servers</a>
         </div>
     </header>

@@ -5,6 +5,7 @@
 @section('content')
 <div class="sync-console">
     @include('partials.sync-console-styles')
+    @include('partials.server-management-tabs')
     <style>
         .sync-console .card { border: 1px solid var(--sync-border); border-radius: 12px; box-shadow: var(--sync-shadow); }
         .sync-console .card-header { background: #fff; border-bottom: 1px solid var(--sync-border); font-weight: 600; }
@@ -45,7 +46,7 @@
                 Submitted by {{ $syncRequest->server?->name ?? 'Unknown server' }}
                 @if ($syncRequest->submitter) ({{ $syncRequest->submitter->name }}) @endif
                 {{ $syncRequest->submitted_at?->diffForHumans() }}. Each record keeps its own outcome;
-                rejecting one never discards the rest. Pending decisions open in the Review inbox.
+                rejecting one never discards the rest. Pending decisions open in the Review Queue.
             </p>
             <div class="sync-meta">
                 <span>{{ number_format($syncRequest->total_operations) }} records</span>
@@ -54,7 +55,12 @@
             </div>
         </div>
         <div class="sync-page-actions">
-            <a class="sync-btn sync-btn--primary" href="{{ route('review-inbox.index') }}">Review inbox</a>
+            <a class="sync-btn sync-btn--primary" href="{{ route('review-inbox.index') }}">
+                Review pending records
+                @if ($syncRequest->pending_count > 0)
+                    <span class="badge text-bg-light border ms-1">{{ number_format($syncRequest->pending_count) }}</span>
+                @endif
+            </a>
             <a class="sync-btn sync-btn--secondary" href="{{ route('sync-requests.index') }}">Back to requests</a>
         </div>
     </header>
@@ -305,7 +311,7 @@
                 <div class="alert alert-info small d-flex justify-content-between align-items-center flex-wrap gap-2 mb-0">
                     <span>This record is waiting for an administrator decision.</span>
                     <a class="alert-link" href="{{ route('review-inbox.show', 'item-'.$item->id) }}">
-                        Review this record in the Review inbox
+                        Review this record in the Review Queue
                     </a>
                 </div>
             @endif

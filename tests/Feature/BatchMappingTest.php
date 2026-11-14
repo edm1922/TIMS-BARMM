@@ -113,6 +113,23 @@ class BatchMappingTest extends TestCase
         $this->assertSame('Batch mapping', $inbox->viewData('entries')->first()['label']);
     }
 
+    public function test_the_batch_page_links_to_its_pending_mapping_decision(): void
+    {
+        $this->submitCreation('MAPPED');
+        $conflict = SyncConflict::query()->where('operation', 'mapping')->firstOrFail();
+
+        $batch = BeneficiaryBatch::factory()->create([
+            'global_uuid' => $this->offlineBatchUuid,
+            'name' => 'Pending Mapping Batch',
+        ]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->get(route('beneficiary-batches.show', $batch))
+            ->assertOk()
+            ->assertSee('Pending batch mapping')
+            ->assertSee(route('review-inbox.show', 'conflict-'.$conflict->conflict_uuid), false);
+    }
+
     public function test_held_members_of_the_same_batch_coalesce_into_one_conflict(): void
     {
         $first = $this->submitCreation('MEMBER');

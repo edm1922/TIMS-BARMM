@@ -5,15 +5,21 @@
 @section('content')
 <style>
     .login-shell {
-        min-height: calc(100vh - 3rem);
+        min-height: 100vh;
+        width: calc(100% + 3rem);
+        margin: -1.5rem;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 1.5rem 0;
-        background:
-            radial-gradient(1000px 380px at 15% 0%, rgba(30, 66, 155, .07), transparent 60%),
-            radial-gradient(800px 380px at 90% 100%, rgba(30, 66, 155, .05), transparent 60%);
+        padding: 1.5rem;
+        background-color: #0b1f3a;
+        background-image:
+            linear-gradient(180deg, rgba(6, 22, 48, .18), rgba(6, 22, 48, .34)),
+            url('{{ asset('assets/images/login-background.png') }}');
+        background-position: center;
+        background-size: cover;
+        background-repeat: no-repeat;
     }
 
     .login-container {

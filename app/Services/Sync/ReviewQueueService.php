@@ -47,7 +47,7 @@ class ReviewQueueService
     ) {}
 
     /**
-     * Every pending decision, newest first.
+     * Every pending decision, oldest first so aging work is surfaced first.
      *
      * @return Collection<int, array<string, mixed>>
      */
@@ -71,8 +71,46 @@ class ReviewQueueService
         return $conflicts
             ->toBase()
             ->merge($items->toBase())
-            ->sortByDesc('age_key')
+            ->sortBy('age_key')
             ->values();
+    }
+
+    /**
+     * The total pending count used by the sidebar badge. Keep this query in one
+     * place so the badge cannot drift from the queue's own counts.
+     */
+    public function pendingCount(): int
+    {
+        $openConflictUuids = SyncConflict::query()
+            ->where('status', 'open')
+            ->pluck('conflict_uuid');
+
+        return $openConflictUuids->count()
+            + SyncRequestItem::query()
+                ->where('status', SyncRequestItem::STATUS_AWAITING_REVIEW)
+                ->where(function ($query) use ($openConflictUuids): void {
+                    $query->whereNull('conflict_uuid');
+
+                    if ($openConflictUuids->isNotEmpty()) {
+                        $query->orWhereNotIn('conflict_uuid', $openConflictUuids);
+                    }
+                })
+                ->count();
+    }
+
+    /**
+     * The open conflict for one entity, used by contextual "pending decision"
+     * notices on beneficiary and batch pages.
+     */
+    public function openConflictForEntity(string $entityType, string $entityUuid, ?string $operation = null): ?SyncConflict
+    {
+        return SyncConflict::query()
+            ->where('entity_type', $entityType)
+            ->where('entity_uuid', $entityUuid)
+            ->where('status', 'open')
+            ->when($operation !== null, fn ($query) => $query->where('operation', $operation))
+            ->latest('id')
+            ->first();
     }
 
     /**

@@ -1,10 +1,11 @@
 @extends('layouts.app')
 
-@section('title', 'Offline Servers')
+@section('title', 'Server Management')
 
 @section('content')
 <div class="sync-console">
     @include('partials.sync-console-styles')
+    @include('partials.server-management-tabs')
 
     <style>
         .sync-console .sync-summary--five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -75,7 +76,7 @@
 
     <header class="sync-page-head">
         <div>
-            <h1 class="sync-page-title">Offline Servers</h1>
+            <h1 class="sync-page-title">Server Management</h1>
             <p class="sync-page-subtitle">
                 Registered offline installations, authorization, scopes, health, and sync history.
             </p>

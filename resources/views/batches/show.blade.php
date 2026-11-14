@@ -102,6 +102,18 @@
         </div>
     </header>
 
+    @if ($pendingMapping)
+        <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2" role="alert">
+            <div>
+                <strong>Pending batch mapping.</strong>
+                This batch has an unresolved mapping decision from an offline installation.
+            </div>
+            <a class="alert-link" href="{{ route('review-inbox.show', 'conflict-'.$pendingMapping->conflict_uuid) }}">
+                Review this decision
+            </a>
+        </div>
+    @endif
+
     <section class="sync-summary batch-summary" aria-label="Batch overview">
         <article class="sync-card sync-stat">
             <div class="sync-stat-label">Total members</div>

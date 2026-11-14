@@ -36,7 +36,7 @@
     </style>
 
     <nav class="sync-breadcrumb mb-2" aria-label="Breadcrumb">
-        <a href="{{ route('review-inbox.index') }}">Review inbox</a>
+        <a href="{{ route('review-inbox.index') }}">Review Queue</a>
         <span>/</span> {{ $entry['label'] }}
     </nav>
 

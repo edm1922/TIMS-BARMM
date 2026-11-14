@@ -5,6 +5,7 @@
 @section('content')
 <div class="sync-console">
     @include('partials.sync-console-styles')
+    @include('partials.server-management-tabs')
 
     <style>
         .sync-console .sync-filter-grid { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; padding: 14px 20px; }
@@ -27,7 +28,12 @@
             </div>
         </div>
         <div class="sync-page-actions">
-            <a class="sync-btn sync-btn--primary" href="{{ route('review-inbox.index') }}">Review inbox</a>
+            <a class="sync-btn sync-btn--primary" href="{{ route('review-inbox.index') }}">
+                Review pending decisions
+                @if ($counts['open'] > 0)
+                    <span class="badge text-bg-light border ms-1">{{ number_format($counts['open']) }}</span>
+                @endif
+            </a>
             <a class="sync-btn sync-btn--secondary" href="{{ route('sync-servers.index') }}">Offline servers</a>
         </div>
     </header>
@@ -96,7 +102,7 @@
         <div class="sync-section-head">
             <div>
                 <h2 class="sync-section-title" id="sync-conflict-list-title">Conflict history</h2>
-                <p class="sync-section-subtitle">Open conflicts link to the review inbox; resolved rows keep the full decision history.</p>
+                <p class="sync-section-subtitle">Open conflicts link to the Review Queue; resolved rows keep the full decision history.</p>
             </div>
             <span class="sync-pill sync-pill--neutral">{{ number_format($conflicts->total()) }} {{ Str::plural('conflict', $conflicts->total()) }}</span>
         </div>
@@ -156,7 +162,7 @@
                                 <td class="text-end">
                                     <a class="sync-btn sync-btn--secondary sync-btn--small"
                                        href="{{ route('sync-conflicts.show', $conflict) }}">
-                                        {{ $conflict->status === 'open' ? 'Review' : 'View' }}
+                                        {{ $conflict->status === 'open' ? 'Review this decision' : 'View' }}
                                     </a>
                                 </td>
                             </tr>

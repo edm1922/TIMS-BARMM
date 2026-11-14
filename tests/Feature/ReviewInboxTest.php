@@ -8,6 +8,7 @@ use App\Models\SyncConflict;
 use App\Models\SyncRequest;
 use App\Models\SyncRequestItem;
 use App\Models\User;
+use App\Services\Sync\ReviewQueueService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -173,9 +174,12 @@ class ReviewInboxTest extends TestCase
 
         $this->actingAs($this->admin)->get(route('review-inbox.index'))
             ->assertOk()
-            ->assertSee('Review inbox')
+            ->assertSee('Review Queue')
+            ->assertSee('Manage pending offline synchronization decisions')
             ->assertSee('Pending Decisions')
             ->assertSee('Decision Queue')
+            ->assertSee('Upload History')
+            ->assertSee('Conflicts &amp; Mappings', false)
             ->assertSee('id="ri-table"', false)
             ->assertSee('id="ri-search"', false)
             ->assertSee('data-filter="other"', false);
@@ -213,6 +217,24 @@ class ReviewInboxTest extends TestCase
             ->get(route('review-inbox.index', ['kind' => 'Deletion approval']))
             ->assertOk()
             ->assertSee('No records match your filters');
+    }
+
+    public function test_the_sidebar_pending_count_matches_the_queue_total_and_oldest_items_come_first(): void
+    {
+        $old = $this->openConflict('deleted');
+        $old->forceFill(['created_at' => now()->subDays(5)])->save();
+        $new = $this->heldItem();
+        $new->forceFill(['created_at' => now()->subDay()])->save();
+
+        $queue = app(ReviewQueueService::class);
+        $this->assertSame(2, $queue->pendingCount());
+
+        $response = $this->actingAs($this->admin)->get(route('review-inbox.index'))->assertOk();
+        $this->assertSame($queue->pendingCount(), $response->viewData('counts')['total']);
+        $this->assertSame('conflict-'.$old->conflict_uuid, $response->viewData('entries')->first()['key']);
+
+        $newest = $this->actingAs($this->admin)->get(route('review-inbox.index', ['sort' => 'newest']))->assertOk();
+        $this->assertSame('item-'.$new->id, $newest->viewData('entries')->first()['key']);
     }
 
     public function test_non_admins_cannot_open_the_inbox(): void

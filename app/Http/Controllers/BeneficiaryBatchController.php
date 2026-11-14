@@ -9,6 +9,7 @@ use App\Models\OfflineServerEncoder;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\BeneficiaryIdGenerator;
+use App\Services\Sync\ReviewQueueService;
 use App\Services\Sync\SyncDeletionGuard;
 use App\Support\SyncIdentity;
 use Illuminate\Http\RedirectResponse;
@@ -85,11 +86,15 @@ class BeneficiaryBatchController extends Controller
             ->limit(500)
             ->get(['id', 'beneficiary_code', 'first_name', 'middle_name', 'last_name', 'barangay', 'city_municipality']);
 
+        $pendingMapping = app(ReviewQueueService::class)
+            ->openConflictForEntity('beneficiary_batch', $beneficiaryBatch->global_uuid, 'mapping');
+
         return view('batches.show', [
             'batch' => $beneficiaryBatch,
             'members' => $members,
             'managers' => $this->managers(),
             'assignable' => $assignable,
+            'pendingMapping' => $pendingMapping,
         ]);
     }
 

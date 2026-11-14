@@ -44,10 +44,22 @@ class SidebarNavigationTest extends TestCase
             ->assertSee('Reports')
             ->assertSee('Audit log')
             ->assertSee('Enroll Server')
-            ->assertSee('Offline Servers')
-            ->assertSee('Review inbox')
+            ->assertSee('Server Management')
             ->assertDontSee('Conflict Resolution</span>', false)
             ->assertDontSee('>Sync Requests<', false);
+    }
+
+    public function test_server_management_pages_expose_the_section_tabs(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->get(route('sync-servers.index'))
+            ->assertOk()
+            ->assertSee('Server Management')
+            ->assertSee('Servers')
+            ->assertSee('Review Queue')
+            ->assertSee('Upload History')
+            ->assertSee('Conflicts &amp; Mappings', false);
     }
 
     public function test_the_sidebar_exposes_correct_sections_for_offline_manager(): void

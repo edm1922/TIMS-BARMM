@@ -21,12 +21,18 @@ class ReviewInboxController extends Controller
         $filters = [
             'q' => trim((string) $request->query('q', '')),
             'kind' => (string) $request->query('kind', ''),
+            'sort' => $request->query('sort') === 'newest' ? 'newest' : 'oldest',
         ];
 
         $entries = $queue->pending();
         $counts = $queue->counts($entries);
 
         $filtered = $queue->filter($entries, $filters);
+
+        if ($filters['sort'] === 'newest') {
+            $filtered = $filtered->sortByDesc('age_key')->values();
+        }
+
         $paginator = $this->paginate($filtered, $filters, $request->query('page'));
 
         return view('review-inbox.index', [
@@ -39,7 +45,7 @@ class ReviewInboxController extends Controller
 
     /**
      * @param  Collection<int, array<string, mixed>>  $entries
-     * @param  array{q: string, kind: string}  $filters
+     * @param  array{q: string, kind: string, sort: string}  $filters
      */
     private function paginate(Collection $entries, array $filters, mixed $page): LengthAwarePaginator
     {

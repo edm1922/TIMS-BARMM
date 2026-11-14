@@ -25,6 +25,7 @@
 
 <div class="sync-console">
     @include('partials.sync-console-styles')
+    @include('partials.server-management-tabs')
 
     <style>
         .sync-console .sync-breadcrumb { font-size: 12.5px; color: var(--sync-muted); margin-bottom: 6px; }
@@ -47,7 +48,7 @@
     <header class="sync-page-head">
         <div>
             <div class="sync-breadcrumb">
-                <a href="{{ route('sync-servers.index') }}">Offline Servers</a><span>/</span>{{ $server->name }}
+                <a href="{{ route('sync-servers.index') }}">Server Management</a><span>/</span>{{ $server->name }}
             </div>
             <h1 class="sync-page-title">{{ $server->name }}</h1>
             <div class="sync-meta">
@@ -379,7 +380,7 @@
                     <div class="sync-help mb-2">
                         Revoked installations cannot be reauthorized or receive a new token. Their stored
                         server token no longer works. To restore this installation without losing local data,
-                        generate a new enrollment token on the Offline Servers page, then use
+                        generate a new enrollment token on the Server Management page, then use
                         <strong>Recover this installation</strong> on the offline Enroll Server page. The same
                         server UUID is reactivated.
                     </div>

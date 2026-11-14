@@ -5,6 +5,7 @@
 @section('content')
 <div class="sync-console">
     @include('partials.sync-console-styles')
+    @include('partials.server-management-tabs')
     <style>
         .sync-console .card { border: 1px solid var(--sync-border); border-radius: 12px; box-shadow: var(--sync-shadow); }
         .sync-console .card-header { background: #fff; border-bottom: 1px solid var(--sync-border); font-weight: 600; }
@@ -164,7 +165,7 @@
     </div>
 </div>
 
-{{-- Decisions are recorded in the unified Review inbox. This page is the
+{{-- Decisions are recorded in the unified Review Queue. This page is the
      read-only conflict history: it keeps the comparison and the decision log. --}}
 @if ($conflict->status === 'open')
     <div class="card mb-3">
@@ -172,7 +173,7 @@
             <div>
                 <div class="fw-semibold">Decision required</div>
                 <div class="small text-muted">
-                    This decision is recorded in the Review inbox, together with every other pending decision.
+                    This decision is recorded in the Review Queue, together with every other pending decision.
                 </div>
             </div>
             <a class="btn btn-primary"

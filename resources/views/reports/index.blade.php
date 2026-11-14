@@ -115,6 +115,11 @@
         .sync-console .report-status .form-check:has(input:checked) { border-color: var(--sync-primary); background: #eff6ff; }
         .sync-console .report-chips { display: flex; flex-wrap: wrap; gap: 6px; }
         .sync-console .report-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; padding: 3px 8px; border-radius: 999px; background: #f1f5f9; color: #475569; border: 1px solid #e5e7eb; }
+        .sync-console .report-table-tools { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+        .sync-console .report-date-range { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+        .sync-console .report-date-range .sync-kv-label { margin: 0; font-size: 11.5px; }
+        .sync-console .report-date-range .sync-input { width: auto; min-height: 34px; padding: 4px 8px; }
+        @media (max-width: 767.98px) { .sync-console .report-table-tools { align-items: stretch; } .sync-console .report-date-range { justify-content: flex-start; } }
         .sync-console .report-id { display: block; max-width: 26ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
         .sync-console .report-name { font-weight: 600; font-size: 13px; color: var(--sync-primary); text-decoration: none; }
         .sync-console .report-name:hover { text-decoration: underline; }
@@ -184,6 +189,12 @@
     </section>
 
     <form method="GET" action="{{ route('reports.index') }}" class="sync-card mb-3">
+        @if ($filters['created_from'] !== '')
+            <input type="hidden" name="created_from" value="{{ $filters['created_from'] }}">
+        @endif
+        @if ($filters['created_to'] !== '')
+            <input type="hidden" name="created_to" value="{{ $filters['created_to'] }}">
+        @endif
         <div class="sync-section-head">
             <div>
                 <h2 class="sync-section-title">Search &amp; filter beneficiaries</h2>
@@ -267,16 +278,6 @@
                 </select>
             </div>
 
-            <div class="span-2">
-                <label class="sync-kv-label d-block mb-1" for="created_from">Created from</label>
-                <input type="date" class="sync-input" id="created_from" name="created_from" value="{{ $filters['created_from'] }}">
-            </div>
-
-            <div class="span-2">
-                <label class="sync-kv-label d-block mb-1" for="created_to">Created to</label>
-                <input type="date" class="sync-input" id="created_to" name="created_to" value="{{ $filters['created_to'] }}">
-            </div>
-
             <div class="span-4">
                 <span class="sync-kv-label d-block mb-1">Records</span>
                 <div class="report-status" role="radiogroup" aria-label="Record status">
@@ -310,10 +311,25 @@
                     @endif
                 </p>
             </div>
-            <div class="report-chips">
-                @foreach ($filterLabels as $label => $value)
-                    <span class="report-chip">{{ $label }}: <strong>{{ $value }}</strong></span>
-                @endforeach
+            <div class="report-table-tools">
+                <form method="GET" action="{{ route('reports.index') }}" class="report-date-range">
+                    @foreach ($filters as $key => $value)
+                        @if ($value !== null && $value !== '' && ! in_array($key, ['created_from', 'created_to'], true))
+                            <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                        @endif
+                    @endforeach
+                    <input type="hidden" name="per_page" value="{{ $perPage }}">
+                    <label class="sync-kv-label" for="created_from">Created from</label>
+                    <input type="date" class="sync-input" id="created_from" name="created_from" value="{{ $filters['created_from'] }}">
+                    <label class="sync-kv-label" for="created_to">Created to</label>
+                    <input type="date" class="sync-input" id="created_to" name="created_to" value="{{ $filters['created_to'] }}">
+                    <button class="sync-btn sync-btn--secondary sync-btn--small" type="submit">Apply</button>
+                </form>
+                <div class="report-chips">
+                    @foreach ($filterLabels as $label => $value)
+                        <span class="report-chip">{{ $label }}: <strong>{{ $value }}</strong></span>
+                    @endforeach
+                </div>
             </div>
         </div>
 

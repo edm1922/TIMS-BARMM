@@ -11,6 +11,7 @@ use App\Models\OfflineServerEncoder;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\DuplicateDetector;
+use App\Services\Sync\ReviewQueueService;
 use App\Services\Sync\SyncDeletionGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -495,8 +496,10 @@ class BeneficiaryController extends Controller
 
         $candidates = $this->duplicates->findFor($beneficiary, $beneficiary->id);
         $timeline = $beneficiary->applicationTimeline();
+        $pendingDeletion = app(ReviewQueueService::class)
+            ->openConflictForEntity('beneficiary', $beneficiary->global_uuid, 'deleted');
 
-        return view('beneficiaries.show', compact('beneficiary', 'candidates', 'timeline'));
+        return view('beneficiaries.show', compact('beneficiary', 'candidates', 'timeline', 'pendingDeletion'));
     }
 
     public function edit(Beneficiary $beneficiary): View

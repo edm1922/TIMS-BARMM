@@ -122,6 +122,18 @@
         </div>
     </header>
 
+    @if ($pendingDeletion)
+        <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2" role="alert">
+            <div>
+                <strong>Pending deletion approval.</strong>
+                This beneficiary has a removal request waiting in the Review Queue.
+            </div>
+            <a class="alert-link" href="{{ route('review-inbox.show', 'conflict-'.$pendingDeletion->conflict_uuid) }}">
+                Review this decision
+            </a>
+        </div>
+    @endif
+
     <section class="sync-summary beneficiary-summary" aria-label="Beneficiary overview">
         <article class="sync-card sync-stat">
             <div class="sync-stat-label">Age (computed)</div>

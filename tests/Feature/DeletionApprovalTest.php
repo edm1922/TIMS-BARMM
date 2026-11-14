@@ -143,7 +143,7 @@ class DeletionApprovalTest extends TestCase
         $this->actingAs($admin)
             ->get(route('sync-requests.show', $request))
             ->assertOk()
-            ->assertSee('Review this record in the Review inbox')
+            ->assertSee('Review this record in the Review Queue')
             ->assertDontSee('Accept record');
 
         $this->actingAs($admin)
@@ -156,6 +156,31 @@ class DeletionApprovalTest extends TestCase
 
         $this->assertSame(SyncRequestItem::STATUS_AWAITING_REVIEW, $item->fresh()->status);
         $this->assertSame('open', SyncConflict::query()->firstOrFail()->status);
+    }
+
+    public function test_upload_history_exposes_the_pending_review_shortcut(): void
+    {
+        $this->submitDeletion();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->get(route('sync-requests.index'))
+            ->assertOk()
+            ->assertSee('Review pending records')
+            ->assertSee(route('review-inbox.index'), false);
+    }
+
+    public function test_the_beneficiary_page_links_to_its_pending_deletion_approval(): void
+    {
+        $this->submitDeletion();
+
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $conflict = SyncConflict::query()->where('operation', 'deleted')->firstOrFail();
+
+        $this->actingAs($admin)->get(route('beneficiaries.show', $this->beneficiary))
+            ->assertOk()
+            ->assertSee('Pending deletion approval')
+            ->assertSee(route('review-inbox.show', 'conflict-'.$conflict->conflict_uuid), false);
     }
 
     public function test_a_retried_deletion_reuses_the_one_open_approval(): void

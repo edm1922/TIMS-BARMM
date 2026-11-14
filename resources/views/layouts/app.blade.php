@@ -253,40 +253,15 @@
                                         </a>
                                     </li>
                                 @endif
-                                @if (Route::has('sync-servers.index') && auth()->user()->isAdmin())
+                                @if (Route::has('sync-servers.index') && auth()->user()->isAdmin() && \App\Support\SyncIdentity::isOnline())
+                                    @php($serverManagementPending = app(\App\Services\Sync\ReviewQueueService::class)->pendingCount())
                                     <li class="nav-item">
-                                        <a class="nav-link {{ request()->routeIs('sync-servers.*') ? 'active' : '' }}"
+                                        <a class="nav-link {{ request()->routeIs('sync-servers.*') || request()->routeIs('review-inbox.*') || request()->routeIs('sync-requests.*') || request()->routeIs('sync-conflicts.*') ? 'active' : '' }}"
                                            href="{{ route('sync-servers.index') }}">
                                             @include('partials.nav-icon', ['name' => 'sync'])
-                                            <span>Offline Servers</span>
-                                        </a>
-                                    </li>
-                                @endif
-                                @if (Route::has('review-inbox.index') && auth()->user()->isAdmin())
-                                    @php
-                                        // The inbox badge mirrors the inbox "Waiting" total:
-                                        // every open conflict plus every held upload item that
-                                        // is not already represented by an open conflict.
-                                        $openConflictUuids = \App\Models\SyncConflict::query()
-                                            ->where('status', 'open')
-                                            ->pluck('conflict_uuid');
-                                        $reviewInboxCount = $openConflictUuids->count() + \App\Models\SyncRequestItem::query()
-                                            ->where('status', 'awaiting_review')
-                                            ->where(function ($query) use ($openConflictUuids): void {
-                                                $query->whereNull('conflict_uuid');
-                                                if ($openConflictUuids->isNotEmpty()) {
-                                                    $query->orWhereNotIn('conflict_uuid', $openConflictUuids);
-                                                }
-                                            })
-                                            ->count();
-                                    @endphp
-                                    <li class="nav-item">
-                                        <a class="nav-link {{ request()->routeIs('review-inbox.*') ? 'active' : '' }}"
-                                           href="{{ route('review-inbox.index') }}">
-                                            @include('partials.nav-icon', ['name' => 'sync'])
-                                            <span>Review inbox</span>
-                                            @if ($reviewInboxCount > 0)
-                                                <span class="badge text-bg-warning ms-1">{{ $reviewInboxCount }}</span>
+                                            <span>Server Management</span>
+                                            @if ($serverManagementPending > 0)
+                                                <span class="badge text-bg-warning ms-1">{{ $serverManagementPending }}</span>
                                             @endif
                                         </a>
                                     </li>

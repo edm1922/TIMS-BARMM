@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Review inbox')
+@section('title', 'Review Queue')
 
 @section('content')
 @php
@@ -26,6 +26,7 @@
 
 <div class="sync-console review-inbox">
     @include('partials.sync-console-styles')
+    @include('partials.server-management-tabs')
 
     <style>
         .review-inbox a.sync-stat { text-decoration: none; color: inherit; }
@@ -61,16 +62,19 @@
         .review-inbox .ri-kind-detail { font-size: 12px; color: var(--sync-muted); margin-top: 3px; max-width: 46ch; }
         .review-inbox .ri-record-cell { font-size: 13px; font-weight: 600; }
         .review-inbox .ri-primary-count { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+        .review-inbox a.sync-stat.is-empty { padding: 12px 14px; opacity: .72; }
+        .review-inbox a.sync-stat.is-empty .sync-stat-note { display: none; }
+        .review-inbox a.sync-stat.is-empty .ri-category-icon { width: 28px; height: 28px; }
+        .review-inbox a.sync-stat.is-empty .ri-category-count { font-size: 18px; color: var(--sync-muted); }
         .review-inbox .ri-search { max-width: 240px; }
         @media (max-width: 575.98px) { .review-inbox .ri-search { max-width: none; width: 100%; } }
     </style>
 
     <header class="sync-page-head">
         <div>
-            <h1 class="sync-page-title">Review inbox</h1>
+            <h1 class="sync-page-title">Review Queue</h1>
             <p class="sync-page-subtitle">
-                Every record waiting for an administrator decision, gathered from upload history and conflict
-                resolution into one queue. Each row opens the workspace that can decide it.
+                Manage pending offline synchronization decisions and resolve records requiring administrator review.
             </p>
             <div class="sync-meta">
                 @if ($allClear)
@@ -83,8 +87,8 @@
             </div>
         </div>
         <div class="sync-page-actions">
-            <a class="sync-btn sync-btn--secondary" href="{{ route('sync-requests.index') }}">Upload history</a>
-            <a class="sync-btn sync-btn--secondary" href="{{ route('sync-conflicts.index') }}">Conflicts &amp; mappings</a>
+            <a class="sync-btn sync-btn--secondary" href="{{ route('sync-requests.index') }}">Upload History</a>
+            <a class="sync-btn sync-btn--secondary" href="{{ route('sync-conflicts.index') }}">Conflicts &amp; Mappings</a>
         </div>
     </header>
 
@@ -102,7 +106,7 @@
         </article>
 
         @foreach ($categories as $category)
-            <a class="sync-card sync-stat {{ $filters['kind'] === $category['filter'] ? 'is-active' : '' }}"
+            <a class="sync-card sync-stat {{ $filters['kind'] === $category['filter'] ? 'is-active' : '' }} {{ $counts[$category['key']] === 0 ? 'is-empty' : '' }}"
                href="{{ route('review-inbox.index', array_filter(['kind' => $category['filter'], 'q' => $filters['q']])) }}"
                data-filter="{{ $category['filter'] }}"
                title="Show {{ strtolower($category['title']) }} in the decision queue">
@@ -130,6 +134,10 @@
                 @endif
                 <input type="search" class="sync-input ri-search" id="ri-search" name="q"
                        value="{{ $filters['q'] }}" placeholder="Search records..." aria-label="Search pending decisions">
+                <select class="sync-input" name="sort" aria-label="Sort pending decisions" style="min-width: 150px;">
+                    <option value="oldest" @selected($filters['sort'] === 'oldest')>Oldest first</option>
+                    <option value="newest" @selected($filters['sort'] === 'newest')>Newest first</option>
+                </select>
                 <button class="sync-btn sync-btn--secondary sync-btn--small" type="submit">Search</button>
             </form>
         </div>
@@ -167,10 +175,11 @@
                 <table class="sync-ops-table" id="ri-table">
                     <thead>
                         <tr>
-                            <th scope="col">Decision needed</th>
+                            <th scope="col">Category</th>
                             <th scope="col">Record</th>
                             <th scope="col">Installation</th>
-                            <th scope="col">Detected</th>
+                            <th scope="col">Submitted</th>
+                            <th scope="col">Pending</th>
                             <th scope="col" class="text-end">Action</th>
                         </tr>
                     </thead>
@@ -194,7 +203,12 @@
                                     <div class="ri-record-cell">{{ $entry['entity'] }} - {{ $entry['detail'] }}</div>
                                 </td>
                                 <td style="font-size: 12.5px;">{{ $entry['server'] }}</td>
-                                <td class="sync-ops-when" title="{{ $entry['created'] }}">{{ $entry['created']?->diffForHumans() ?? '-' }}</td>
+                                <td class="sync-ops-when" title="{{ $entry['created']?->toIso8601String() }}">
+                                    {{ $entry['created']?->format('M j, Y g:i A') ?? '-' }}
+                                </td>
+                                <td class="text-nowrap" style="font-size: 12.5px;">
+                                    {{ $entry['created']?->diffForHumans(null, true) ?? '-' }}
+                                </td>
                                 <td class="text-end">
                                     <a class="sync-btn sync-btn--secondary sync-btn--small"
                                        style="{{ $entry['severity'] === 'danger' ? 'color: var(--sync-danger); border-color: #fecaca;' : '' }}"
