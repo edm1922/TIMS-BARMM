@@ -95,6 +95,42 @@ class ReportController extends Controller
             $filename = BeneficiaryReport::exportFilename($location, $count, $format);
 
             if ($format === 'xlsx') {
+                // With "All batches" selected, the operator chooses between a
+                // worksheet per batch and one continuous list. A single batch
+                // (or only unassigned records) keeps the original single-sheet
+                // workbook either way.
+                if ($filters['batch'] === '' && $this->xlsxMode($request) === 'per_batch') {
+                    $sections = [];
+
+                    foreach (BeneficiaryBatch::query()->orderBy('name')->get(['id', 'name']) as $targetBatch) {
+                        $batchQuery = (clone $query)->inBatch((int) $targetBatch->id);
+
+                        if ((clone $batchQuery)->count() === 0) {
+                            continue;
+                        }
+
+                        $sections[] = [
+                            'name' => $targetBatch->name,
+                            'beneficiaries' => $batchQuery->cursor(),
+                            'location' => BeneficiaryReport::locationWithBatch($location, $targetBatch->name),
+                        ];
+                    }
+
+                    $unassignedQuery = (clone $query)->whereNull('beneficiary_batch_id');
+
+                    if ((clone $unassignedQuery)->count() > 0) {
+                        $sections[] = [
+                            'name' => 'Unassigned',
+                            'beneficiaries' => $unassignedQuery->cursor(),
+                            'location' => $location,
+                        ];
+                    }
+
+                    if (count($sections) > 1) {
+                        return BeneficiaryProfileXlsxExporter::downloadByBatch($filename, $sections);
+                    }
+                }
+
                 return BeneficiaryProfileXlsxExporter::download(
                     $filename,
                     $query->cursor(),
@@ -116,6 +152,11 @@ class ReportController extends Controller
         } catch (Throwable $exception) {
             return $this->failure('export', $exception);
         }
+    }
+
+    private function xlsxMode(Request $request): string
+    {
+        return $request->query('xlsx_mode') === 'single' ? 'single' : 'per_batch';
     }
 
     /**

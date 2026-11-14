@@ -61,8 +61,8 @@
             <h1 class="sync-page-title">Users &amp; Roles</h1>
             <p class="sync-page-subtitle">Monitor system user accounts, role permissions and offline installation accounts.</p>
             <div class="sync-meta">
-                <span><strong>{{ number_format($roleCounts['total']) }}</strong> central {{ Str::plural('account', $roleCounts['total']) }}</span>
-                <span>{{ number_format($offlineAccounts->count()) }} offline accounts reported</span>
+                <span><strong>{{ number_format($roleCounts['central_total']) }}</strong> central {{ Str::plural('account', $roleCounts['central_total']) }}</span>
+                <span>{{ number_format($roleCounts['offline_total']) }} offline accounts reported</span>
             </div>
         </div>
         <div class="sync-page-actions">
@@ -74,7 +74,7 @@
         <article class="sync-card sync-stat">
             <div class="sync-stat-label">Total Users</div>
             <div class="sync-stat-value">{{ number_format($roleCounts['total']) }}</div>
-            <div class="sync-stat-note">Central accounts with dashboard access.</div>
+            <div class="sync-stat-note">Central and offline installation accounts.</div>
         </article>
         <article class="sync-card sync-stat">
             <div class="sync-stat-label">Administrators</div>
@@ -84,17 +84,17 @@
         <article class="sync-card sync-stat">
             <div class="sync-stat-label">Encoders</div>
             <div class="sync-stat-value">{{ number_format($roleCounts['encoder']) }}</div>
-            <div class="sync-stat-note">Beneficiary encoding accounts.</div>
+            <div class="sync-stat-note">Central and offline encoding accounts.</div>
         </article>
         <article class="sync-card sync-stat">
-            <div class="sync-stat-label">Staff</div>
-            <div class="sync-stat-value">{{ number_format($roleCounts['staff']) }}</div>
-            <div class="sync-stat-note">Read/limited operational accounts.</div>
+            <div class="sync-stat-label">Managers</div>
+            <div class="sync-stat-value">{{ number_format($roleCounts['manager']) }}</div>
+            <div class="sync-stat-note">Offline installation manager accounts.</div>
         </article>
         <article class="sync-card sync-stat {{ $roleCounts['inactive'] > 0 ? 'sync-stat--warning' : '' }}">
             <div class="sync-stat-label">Inactive</div>
             <div class="sync-stat-value">{{ number_format($roleCounts['inactive']) }}</div>
-            <div class="sync-stat-note">Accounts currently unable to sign in.</div>
+            <div class="sync-stat-note">Central and offline accounts unable to sign in.</div>
         </article>
     </section>
 

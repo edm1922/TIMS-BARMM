@@ -746,6 +746,36 @@ class ImportWorkflowTest extends TestCase
         $this->assertSame(0, $trend['months'][now()->year][now()->month]);
     }
 
+    public function test_import_for_a_new_coverage_year_does_not_match_prior_year_records(): void
+    {
+        $priorBatch = BeneficiaryBatch::factory()->create(['name' => '2026 Batch', 'program_year' => 2026]);
+        $nextBatch = BeneficiaryBatch::factory()->create(['name' => '2027 Batch', 'program_year' => 2027]);
+
+        Beneficiary::factory()->create([
+            'coverage_year' => 2026,
+            'beneficiary_batch_id' => $priorBatch->id,
+            'source_id_number' => 'DOLE XII -SCFO-BARMM-1507-102026-000001',
+            'source_id_no' => 'GOV-0001',
+            'first_name' => 'FIRST1',
+            'middle_name' => 'MIDDLE',
+            'last_name' => 'LAST1',
+            'birthdate' => '1980-02-02',
+        ]);
+
+        $path = $this->makeWorkbook([$this->sourceRow(1, ['U' => 5000])]);
+        $batch = $this->uploadAndPreview($path, null, $nextBatch->id, '2027-02-01');
+
+        $this->assertSame('new', $batch->rows()->where('excel_row', 15)->value('outcome'));
+
+        $this->actingAs($this->admin())->post('/imports/'.$batch->id.'/apply', [
+            'decisions' => ['new' => 'insert', 'update' => 'update', 'duplicate' => 'skip', 'review' => 'skip'],
+            'confirm' => 1,
+        ])->assertRedirect(route('imports.show', $batch));
+
+        $this->assertSame(2, Beneficiary::query()->where('source_id_number', 'DOLE XII -SCFO-BARMM-1507-102026-000001')->count());
+        $this->assertSame(1, Beneficiary::query()->where('coverage_year', 2027)->count());
+    }
+
     public function test_update_does_not_overwrite_an_existing_profiling_date(): void
     {
         $path = $this->makeWorkbook([$this->sourceRow(1, ['U' => 2000])]);
@@ -762,7 +792,7 @@ class ImportWorkflowTest extends TestCase
         // A later import updates the record (income changed) with a different
         // profiling date; the original profiling date must be preserved.
         $changed = $this->makeWorkbook([$this->sourceRow(1, ['U' => 4000])]);
-        $second = $this->uploadAndPreview($changed, null, null, '2024-06-01');
+        $second = $this->uploadAndPreview($changed, null, null, '2025-06-01');
 
         $this->actingAs($this->admin())->post('/imports/'.$second->id.'/apply', [
             'decisions' => ['new' => 'insert', 'update' => 'update', 'duplicate' => 'skip', 'review' => 'skip'],
@@ -785,7 +815,7 @@ class ImportWorkflowTest extends TestCase
         ]);
 
         $path = $this->makeWorkbook([$this->sourceRow(1, ['U' => 9999])]);
-        $batch = $this->uploadAndPreview($path, null, null, '2024-09-09');
+        $batch = $this->uploadAndPreview($path, null, null, '2026-09-09');
 
         $summary = $batch->rows()->pluck('outcome', 'excel_row');
         $this->assertSame('update', $summary->first());
@@ -796,7 +826,7 @@ class ImportWorkflowTest extends TestCase
         ])->assertRedirect(route('imports.show', $batch));
 
         $factoryBeneficiary->refresh();
-        $this->assertSame('2024-09-09', $factoryBeneficiary->profiled_on?->toDateString());
+        $this->assertSame('2026-09-09', $factoryBeneficiary->profiled_on?->toDateString());
     }
 
     public function test_cancelled_import_does_not_touch_beneficiary_profiling_dates(): void

@@ -130,14 +130,22 @@ class UserMonitoringTest extends TestCase
                 ],
             ])->assertOk();
 
-        $this->actingAs($this->admin())
+        $page = $this->actingAs($this->admin())
             ->get(route('users.index'))
             ->assertOk()
             ->assertSee('Offline installation accounts')
             ->assertSee('the_manager')
             ->assertSee('an_encoder')
             ->assertSee('Manager')
-            ->assertSee('Encoder');
+            ->assertSee('Encoder')
+            ->assertSee('Managers');
+
+        $counts = $page->viewData('roleCounts');
+
+        $this->assertSame(3, $counts['total']);
+        $this->assertSame(1, $counts['admin']);
+        $this->assertSame(1, $counts['encoder']);
+        $this->assertSame(1, $counts['manager']);
     }
 
     public function test_user_monitoring_is_admin_only(): void

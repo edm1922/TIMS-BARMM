@@ -195,8 +195,44 @@ final class LocalChangeApplier
             }
         }
 
-        $beneficiary = Beneficiary::query()->where('global_uuid', $entityUuid)->first()
-            ?? new Beneficiary(['global_uuid' => $entityUuid]);
+        $beneficiary = Beneficiary::query()->where('global_uuid', $entityUuid)->first();
+
+        // A stale local copy can hold the same government ID under an older
+        // global UUID (for example after an import collision repair). The
+        // unique key (source_id_no, origin_server_uuid) would otherwise abort
+        // the whole delta. Re-key that local row to the incoming identity so
+        // the central record remains authoritative without creating a second
+        // person.
+        if ($beneficiary === null) {
+            $sourceIdNo = trim((string) ($data['source_id_no'] ?? ''));
+            $origin = trim((string) ($change['origin_server_uuid'] ?? ''));
+
+            if ($sourceIdNo !== '' && $origin !== '') {
+                $beneficiary = Beneficiary::query()
+                    ->where('source_id_no', $sourceIdNo)
+                    ->where('origin_server_uuid', $origin)
+                    ->first();
+
+                if ($beneficiary !== null) {
+                    $beneficiary->forceFill(['global_uuid' => $entityUuid]);
+
+                    SyncEvent::create([
+                        'type' => 'identity.reconciled',
+                        'severity' => 'info',
+                        'message' => 'Local beneficiary re-keyed to the incoming central identity after a government ID collision.',
+                        'context' => [
+                            'entity_type' => 'beneficiary',
+                            'entity_uuid' => $entityUuid,
+                            'local_id' => $beneficiary->id,
+                            'source_id_no' => $sourceIdNo,
+                            'origin_server_uuid' => $origin,
+                        ],
+                    ]);
+                }
+            }
+        }
+
+        $beneficiary ??= new Beneficiary(['global_uuid' => $entityUuid]);
 
         $beneficiary->fill($data);
 
@@ -221,8 +257,9 @@ final class LocalChangeApplier
         $middleName = $data['middle_name'] ?? null;
         $lastName = $data['last_name'] ?? null;
         $birthdate = $data['birthdate'] ?? null;
+        $coverageYear = isset($data['coverage_year']) ? (int) $data['coverage_year'] : null;
 
-        // Use the same duplicate detection logic as the central server
+        // Use the same duplicate detection logic as the central server.
         $duplicates = $this->duplicates->find(
             $beneficiaryCode,
             $sourceIdNumber,
@@ -231,6 +268,8 @@ final class LocalChangeApplier
             $middleName,
             $lastName,
             $birthdate ? (string) $birthdate : null,
+            null,
+            $coverageYear,
         );
 
         \Log::debug('findLocalDuplicate', [

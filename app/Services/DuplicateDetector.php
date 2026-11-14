@@ -18,9 +18,19 @@ class DuplicateDetector
      */
     public function find(?string $beneficiaryCode, ?string $sourceIdNumber, ?string $sourceIdNo,
         ?string $first, ?string $middle, ?string $last, ?string $birthdateIso,
-        ?int $ignoreId = null): ?array
+        ?int $ignoreId = null, ?int $coverageYear = null): ?array
     {
-        $base = fn ($query) => $ignoreId ? $query->where('id', '!=', $ignoreId) : $query;
+        $base = function ($query) use ($ignoreId, $coverageYear) {
+            if ($ignoreId !== null) {
+                $query->where('id', '!=', $ignoreId);
+            }
+
+            if ($coverageYear !== null) {
+                $query->where('coverage_year', $coverageYear);
+            }
+
+            return $query;
+        };
 
         // 1. exact application-generated code
         if ($beneficiaryCode !== null && $beneficiaryCode !== '') {
@@ -82,7 +92,7 @@ class DuplicateDetector
      *
      * @return array{rule: string, matches: Collection<int, Beneficiary>}|null
      */
-    public function findForRegistration(?string $first, ?string $middle, ?string $last, ?string $birthdateIso): ?array
+    public function findForRegistration(?string $first, ?string $middle, ?string $last, ?string $birthdateIso, ?int $coverageYear = null): ?array
     {
         $first = NameNormalizer::segment($first);
         $last = NameNormalizer::segment($last);
@@ -99,6 +109,7 @@ class DuplicateDetector
 
         $nameMatches = Beneficiary::query()
             ->where('name_key', 'like', $pattern)
+            ->when($coverageYear !== null, fn ($query) => $query->where('coverage_year', $coverageYear))
             ->get();
 
         if ($nameMatches->isEmpty()) {
@@ -134,6 +145,7 @@ class DuplicateDetector
             $subject->last_name,
             $subject->birthdate?->toDateString(),
             $ignoreId,
+            $subject->coverage_year,
         );
     }
 

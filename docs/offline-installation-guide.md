@@ -44,10 +44,78 @@
 ### Before You Start
 
 - [ ] Install XAMPP to `C:\xampp` (default path)
+- [ ] Enable PHP and the required PHP extensions (see below)
 - [ ] Copy the TIMS-BARMM project to `C:\xampp\htdocs\TIMS-BARMM`
 - [ ] Obtain a **one-time enrollment token** from the central server administrator
 - [ ] Know the **central server URL** (e.g., `https://central.tims-barmm.gov.ph`)
 - [ ] Determine the **LAN subnet** for the hotspot (e.g., `192.168.137.0/24`)
+
+### Enabling PHP and required extensions
+
+XAMPP installs PHP, Apache and MySQL but some PHP extensions can remain
+disabled, and Apache may not load the PHP module on a non-default setup. The
+installer checks the extensions before it changes anything.
+
+1. Open `C:\xampp\php\php.ini` in Notepad as Administrator.
+2. Remove the leading `;` from each required extension line:
+   ```ini
+   extension=pdo_mysql
+   extension=openssl
+   extension=mbstring
+   extension=tokenizer
+   extension=ctype
+   extension=json
+   extension=fileinfo
+   extension=xml
+   extension=zip
+   ```
+3. Save the file and restart **Apache** from the XAMPP Control Panel.
+4. Verify every extension from PowerShell:
+   ```powershell
+   & "C:\xampp\php\php.exe" -r "foreach (['pdo_mysql','openssl','mbstring','tokenizer','ctype','json','fileinfo','xml','zip'] as $e) { echo $e.': '.(extension_loaded($e) ? 'OK' : 'MISSING').PHP_EOL; }"
+   ```
+   All entries must print **OK**.
+5. If Apache serves `.php` files as plain text or downloads them, enable the
+   PHP module in `C:\xampp\apache\conf\httpd.conf` by removing the leading
+   `#` from:
+   ```apache
+   LoadModule php_module "C:/xampp/php/php8apache2_4.dll"
+   AddHandler application/x-httpd-php .php
+   PHPIniDir "C:/xampp/php"
+   ```
+   Use the DLL name that exists under `C:\xampp\php` for the installed PHP
+   version, save the file, and restart Apache.
+
+6. The package also ships a helper that edits `php.ini` safely and backs it up.
+   Run it as Administrator from the project folder:
+   ```powershell
+   .\scripts\enable-php-extensions.ps1 -Extensions zip -RestartApache
+   ```
+   Omit `-Extensions` to enable the full required set. Add `-CheckOnly` to
+   inspect the current state without changing the file.
+
+---
+
+### Removing orphaned zero-member batches
+
+Some early PAHAMUDDIN / DATU PIANG test imports left soft-deleted batch
+tombstones with no beneficiaries. They can be mirrored to offline
+installations and appear as orphaned `0 batches`.
+
+The central server has already been cleaned. For an existing offline
+installation run the cleanup as Administrator:
+
+```powershell
+# Preview first
+.\scripts\purge-orphan-batches.ps1
+
+# Permanently remove the confirmed zero-member orphans
+.\scripts\purge-orphan-batches.ps1 -Force
+```
+
+The script only removes batches whose names match the known orphan list **and**
+that have zero beneficiaries. Batches containing beneficiary records are never
+touched.
 
 ---
 

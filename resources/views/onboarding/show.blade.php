@@ -81,43 +81,30 @@
 
                     <h2 class="h6 mt-4">Area served</h2>
                     <div class="mb-3">
-                        <label for="area_name" class="form-label">Area name</label>
-                        <input type="text" name="area_name" id="area_name" value="{{ old('area_name') }}"
-                               class="form-control @error('area_name') is-invalid @enderror"
-                               placeholder="e.g. Cotabato City Field Office" required>
-                        <div class="form-text">A human-readable name for this device's area.</div>
-                        @error('area_name')
+                        <label for="area" class="form-label">Area served</label>
+                        <select name="area" id="area"
+                                class="form-select @error('area') is-invalid @enderror" required>
+                            <option value="">Select the area this device serves…</option>
+                            @foreach ($areaOptions as $group => $options)
+                                <optgroup label="{{ $group }}">
+                                    @foreach ($options as $option)
+                                        <option value="{{ $option['value'] }}" @selected(old('area') === $option['value'])>
+                                            {{ $option['label'] }}
+                                        </option>
+                                    @endforeach
+                                </optgroup>
+                            @endforeach
+                        </select>
+                        <div class="form-text">
+                            Choose the entire BARMM region, a province, a city/municipality, or a barangay.
+                            The area level and PSGC code are recorded automatically.
+                        </div>
+                        @error('area')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label for="scope_type" class="form-label">Area level</label>
-                            <select name="scope_type" id="scope_type"
-                                    class="form-select @error('scope_type') is-invalid @enderror" required>
-                                @foreach (['region' => 'Entire BARMM region', 'province' => 'Province', 'city_municipality' => 'City / Municipality', 'barangay' => 'Barangay'] as $value => $label)
-                                    <option value="{{ $value }}" @selected(old('scope_type') === $value)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                            @error('scope_type')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-8">
-                            <label for="scope_code" class="form-label">Area code (PSGC)</label>
-                            <input type="text" name="scope_code" id="scope_code" value="{{ old('scope_code') }}"
-                                   class="form-control @error('scope_code') is-invalid @enderror"
-                                   placeholder="e.g. 1900 or 1900702000" required>
-                            <div class="form-text">
-                                Province codes:
-                                @foreach ($scopeSuggestions as $code => $province)
-                                    <code>{{ $code }}</code>{{ !$loop->last ? ',' : '' }}
-                                @endforeach
-                            </div>
-                            @error('scope_code')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
+                        @error('scope_code')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                        @enderror
                     </div>
 
                     <button class="btn btn-primary w-100 mt-4" type="submit" @disabled($bootstrapUrl === null)>

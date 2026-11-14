@@ -164,7 +164,12 @@ final class SyncRunner
         ])->all());
 
         if (! $response->successful()) {
-            $message = (string) $response->json('error.message', 'The central server rejected the upload.');
+            $message = (string) (
+                $response->json('error.message')
+                ?? $response->json('message')
+                ?? collect($response->json('errors', []))->flatten()->first()
+                ?? 'The central server rejected the upload.'
+            );
 
             foreach ($operations as $operation) {
                 $this->retryLater($operation, $message);

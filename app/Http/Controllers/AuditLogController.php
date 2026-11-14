@@ -34,15 +34,43 @@ class AuditLogController extends Controller
 
         if ($filters['q'] !== '') {
             $like = '%'.$filters['q'].'%';
-            $query->where(fn (Builder $q) => $q
-                ->where('action', 'like', $like)
-                ->orWhere('entity_type', 'like', $like)
-                ->orWhere('ip', 'like', $like)
-                ->orWhere('actor_username', 'like', $like)
-                ->orWhereHas('user', fn (Builder $u) => $u
-                    ->where('name', 'like', $like)
-                    ->orWhere('username', 'like', $like)
-                    ->orWhere('email', 'like', $like)));
+
+            // Resolve matching beneficiaries first. Audit entries reference
+            // beneficiaries by local id or by the ids/codes embedded in their
+            // metadata, so the query must cover both forms.
+            $beneficiaries = Beneficiary::query()
+                ->search($filters['q'])
+                ->limit(100)
+                ->get(['id', 'beneficiary_code']);
+
+            $beneficiaryIds = $beneficiaries->pluck('id')->filter()->values()->all();
+            $beneficiaryCodes = $beneficiaries->pluck('beneficiary_code')->filter()->unique()->values()->all();
+
+            $query->where(function (Builder $outer) use ($like, $beneficiaryIds, $beneficiaryCodes): void {
+                $outer->where('action', 'like', $like)
+                    ->orWhere('entity_type', 'like', $like)
+                    ->orWhere('ip', 'like', $like)
+                    ->orWhere('actor_username', 'like', $like)
+                    ->orWhere('metadata', 'like', $like)
+                    ->orWhereHas('user', fn (Builder $u) => $u
+                        ->where('name', 'like', $like)
+                        ->orWhere('username', 'like', $like)
+                        ->orWhere('email', 'like', $like));
+
+                if ($beneficiaryIds !== []) {
+                    $outer->orWhere(fn (Builder $q) => $q
+                        ->where('entity_type', 'beneficiary')
+                        ->whereIn('entity_id', $beneficiaryIds));
+
+                    foreach ($beneficiaryIds as $beneficiaryId) {
+                        $outer->orWhereJsonContains('metadata->beneficiary_ids', $beneficiaryId);
+                    }
+                }
+
+                foreach ($beneficiaryCodes as $beneficiaryCode) {
+                    $outer->orWhere('metadata', 'like', '%'.$beneficiaryCode.'%');
+                }
+            });
         }
 
         if ($filters['action'] !== '') {

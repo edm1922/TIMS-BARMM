@@ -87,6 +87,26 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function applyAutofill(fields) {
+        if (!mainForm || !fields) {
+            return;
+        }
+
+        Object.keys(fields).forEach(function (name) {
+            var target = mainForm.querySelector('[name="' + name + '"]');
+            if (!target) {
+                return;
+            }
+
+            target.value = fields[name] === null || fields[name] === undefined ? '' : fields[name];
+
+            // Selects and the address widget listen for change/input; notify
+            // them so dependent UI (age, location display, masks) refreshes.
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    }
+
     function reset() {
         alertBox.classList.add('d-none');
         alertBox.className = 'alert d-none';
@@ -153,12 +173,26 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
 
-                // No match: confirm and proceed automatically.
-                alertBox.className = 'alert alert-success';
-                alertBox.textContent = 'No duplication — proceeding to registration.';
-                alertBox.classList.remove('d-none');
+                // No current-year match. A prior-year profile can supply the
+                // registration form values, but the operator must still review
+                // every autofilled field before saving.
+                if (data.autofill && data.previous_application) {
+                    alertBox.className = 'alert alert-success';
+                    alertBox.textContent = 'Existing ' + (data.previous_application.coverage_year || 'prior-year') +
+                        ' profile found (' + data.previous_application.beneficiary_code +
+                        '). Details have been filled in. Review them before saving.';
+                    alertBox.classList.remove('d-none');
 
-                carry();
+                    carry();
+                    applyAutofill(data.autofill);
+                } else {
+                    alertBox.className = 'alert alert-success';
+                    alertBox.textContent = 'No duplication — proceeding to registration.';
+                    alertBox.classList.remove('d-none');
+
+                    carry();
+                }
+
                 unlockRegistration();
                 verificationPassed = true;
                 modal.hide();

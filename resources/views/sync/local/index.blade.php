@@ -8,6 +8,20 @@
     $lastSync = $settings['last_sync_at'] ?: null;
     $lastSnapshot = $settings['last_snapshot_at'] ?: null;
 
+    $formatDateTime = static function ($value): ?string {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse((string) $value)
+                ->timezone(config('app.timezone'))
+                ->format('F j, Y g:i A');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
+    };
+
     $healthState = 'ok';
     $healthLabel = 'In sync';
     $healthNote = 'Queue is clear and the installation is authorized.';
@@ -52,7 +66,7 @@
             </p>
             @if ($isOffline && $enrolledState)
                 <div class="sync-meta">
-                    <span>Last sync: <strong>{{ $lastSync ?: 'Never' }}</strong></span>
+                    <span>Last sync: <strong>{{ $formatDateTime($lastSync) ?: 'Never' }}</strong></span>
                     @if ($settings['last_download_revision'])
                         <span>Cursor <strong>{{ $settings['last_download_revision'] }}</strong></span>
                     @endif
@@ -238,7 +252,7 @@
                 </div>
                 <div class="small mt-1">
                     This installation is prepared for an offline encoding session. Authorization expires
-                    <code>{{ $authorization['expires_at'] }}</code>.
+                    <code>{{ $formatDateTime($authorization['expires_at']) }}</code>.
                     Pending uploads: <code>{{ $queue['pending'] }}</code>,
                     audit events pending: <code>{{ $audit['pending'] }}</code>.
                 </div>
@@ -290,7 +304,7 @@
 
             <article class="sync-card sync-stat">
                 <div class="sync-stat-label">Last successful sync</div>
-                <div class="sync-stat-value" style="font-size: 22px;">{{ $lastSync ?: 'Never' }}</div>
+                <div class="sync-stat-value" style="font-size: 22px;">{{ $formatDateTime($lastSync) ?: 'Never' }}</div>
                 <div class="sync-stat-note">
                     @if ($settings['last_download_revision'])
                         Download cursor {{ $settings['last_download_revision'] }}.
@@ -360,13 +374,13 @@
                                     @endif
                                 </dd>
                             </div>
-                            <div class="sync-kv-row"><dt class="sync-kv-label">Enrolled at</dt><dd class="sync-kv-value">{{ $settings['enrolled_at'] ?: '-' }}</dd></div>
-                            <div class="sync-kv-row"><dt class="sync-kv-label">Authorized at</dt><dd class="sync-kv-value">{{ $authorization['authorized_at'] ?: '-' }}</dd></div>
+                            <div class="sync-kv-row"><dt class="sync-kv-label">Enrolled at</dt><dd class="sync-kv-value">{{ $formatDateTime($settings['enrolled_at']) ?: '-' }}</dd></div>
+                            <div class="sync-kv-row"><dt class="sync-kv-label">Authorized at</dt><dd class="sync-kv-value">{{ $formatDateTime($authorization['authorized_at']) ?: '-' }}</dd></div>
                             <div class="sync-kv-row">
                                 <dt class="sync-kv-label">Authorization expires</dt>
                                 <dd class="sync-kv-value">
                                     @if ($authorization['expires_at'])
-                                        {{ $authorization['expires_at'] }}
+                                        {{ $formatDateTime($authorization['expires_at']) }}
                                         @if ($authorization['expired'])
                                             <span class="badge text-bg-danger">Expired</span>
                                         @else
@@ -380,7 +394,7 @@
                             <div class="sync-kv-row">
                                 <dt class="sync-kv-label">Last snapshot</dt>
                                 <dd class="sync-kv-value">
-                                    {{ $lastSnapshot ?: 'Never' }}
+                                    {{ $formatDateTime($lastSnapshot) ?: 'Never' }}
                                     @if ($settings['last_snapshot_revision'])
                                         <span class="text-muted">(revision {{ $settings['last_snapshot_revision'] }})</span>
                                     @endif
@@ -389,7 +403,7 @@
                             <div class="sync-kv-row">
                                 <dt class="sync-kv-label">Last sync</dt>
                                 <dd class="sync-kv-value">
-                                    {{ $lastSync ?: 'Never' }}
+                                    {{ $formatDateTime($lastSync) ?: 'Never' }}
                                     @if ($settings['last_download_revision'])
                                         <span class="text-muted">(cursor {{ $settings['last_download_revision'] }})</span>
                                     @endif
@@ -620,8 +634,8 @@
                                     @endif
                                 </dd>
                             </div>
-                            <div class="sync-kv-row"><dt class="sync-kv-label">Last checked</dt><dd class="sync-kv-value">{{ $update['checked_at'] ?: 'Never' }}</dd></div>
-                            <div class="sync-kv-row"><dt class="sync-kv-label">Last applied</dt><dd class="sync-kv-value">{{ $update['applied_at'] ?: 'Never' }}</dd></div>
+                            <div class="sync-kv-row"><dt class="sync-kv-label">Last checked</dt><dd class="sync-kv-value">{{ $formatDateTime($update['checked_at']) ?: 'Never' }}</dd></div>
+                            <div class="sync-kv-row"><dt class="sync-kv-label">Last applied</dt><dd class="sync-kv-value">{{ $formatDateTime($update['applied_at']) ?: 'Never' }}</dd></div>
                         </dl>
 
                         <div id="update-progress" class="mt-3" hidden
@@ -695,7 +709,7 @@
                                 <div class="sync-audit-label">Events waiting to be reported</div>
                             </div>
                             <div>
-                                <div class="sync-audit-value" style="font-size: 16px;">{{ $audit['last_sync_at'] ?: 'Never' }}</div>
+                                <div class="sync-audit-value" style="font-size: 16px;">{{ $formatDateTime($audit['last_sync_at']) ?: 'Never' }}</div>
                                 <div class="sync-audit-label">Last reported to the central server</div>
                             </div>
                             <div>
@@ -772,15 +786,20 @@
                 <h2 class="sync-section-title" id="sync-operations-title">Recent local operations</h2>
                 <p class="sync-section-subtitle">The 20 most recent queued, applied or rejected synchronization operations.</p>
             </div>
-            @if ($queue['retryable'] > 0)
-                <form method="POST" action="{{ route('sync.local.retry-rejected') }}" class="m-0"
-                      onsubmit="return confirm('Retry {{ number_format($queue['retryable']) }} eligible operation(s)? Only operations rejected by the former location-scope rule are requeued.');">
-                    @csrf
-                    <button type="submit" class="sync-btn sync-btn--warning sync-btn--small">
-                        Retry {{ number_format($queue['retryable']) }} eligible {{ Str::plural('operation', $queue['retryable']) }}
-                    </button>
-                </form>
-            @endif
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <a class="sync-btn sync-btn--secondary sync-btn--small" href="{{ route('sync.local.index') }}">
+                    Refresh operations
+                </a>
+                @if ($queue['retryable'] > 0)
+                    <form method="POST" action="{{ route('sync.local.retry-rejected') }}" class="m-0"
+                          onsubmit="return confirm('Retry {{ number_format($queue['retryable']) }} eligible operation(s)? Only operations rejected by the former location-scope rule are requeued.');">
+                        @csrf
+                        <button type="submit" class="sync-btn sync-btn--warning sync-btn--small">
+                            Retry {{ number_format($queue['retryable']) }} eligible {{ Str::plural('operation', $queue['retryable']) }}
+                        </button>
+                    </form>
+                @endif
+            </div>
         </div>
 
         @if ($operations->isEmpty())
@@ -816,7 +835,7 @@
                                 $opLabel = ucfirst(str_replace('_', ' ', $opStatus));
                             @endphp
                             <tr>
-                                <td class="sync-ops-when">{{ $operation->created_at?->diffForHumans() }}</td>
+                                <td class="sync-ops-when">{{ $formatDateTime($operation->created_at) }}</td>
                                 <td>
                                     <div class="sync-ops-entity">
                                         <span class="sync-ops-kind">{{ $operation->entity_type }}</span>
@@ -943,7 +962,7 @@ var qrcode=function(){var qrcode=function(typeNumber,errorCorrectionLevel){var P
         connectionBadge.className = 'badge ' + info.class;
 
         if (connectionLastChecked) {
-            connectionLastChecked.textContent = '(checked ' + new Date().toLocaleTimeString() + ')';
+            connectionLastChecked.textContent = '(checked ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ')';
         }
     }
 
@@ -1230,6 +1249,14 @@ var qrcode=function(){var qrcode=function(typeNumber,errorCorrectionLevel){var P
             navigator.clipboard.writeText(value).then(done).catch(function () {
                 button.textContent = 'Copy failed';
             });
+        }
+    });
+
+    // A browser back/forward restore can show an old operations table. Reload
+    // from the server so the latest queued/applied/rejected rows are visible.
+    window.addEventListener('pageshow', function (event) {
+        if (event.persisted) {
+            window.location.reload();
         }
     });
 })();

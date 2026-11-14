@@ -14,6 +14,16 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class WorkbookInspector
 {
     /**
+     * Inspection is bounded: a workbook can advertise a million rows or
+     * sixteen thousand columns because of stray formatting, and walking those
+     * dimensions creates cells until PHP exhausts its memory. The import
+     * itself is capped at 5,000 rows, so a little headroom is enough.
+     */
+    private const MAX_INSPECT_ROWS = 5001;
+
+    private const MAX_INSPECT_COLUMNS = 100;
+
+    /**
      * @return array{
      *   sheets: list<array{name: string, visible: bool, data_rows: int}>,
      *   default_sheet: string,
@@ -28,7 +38,21 @@ class WorkbookInspector
      */
     public function inspect(string $path, ?string $sheetName = null): array
     {
-        $spreadsheet = IOFactory::createReaderForFile($path)->load($path);
+        // A 10 MB XLSX can still expand into a very large cell graph. Give the
+        // inspection request headroom without changing the global PHP setting.
+        @ini_set('memory_limit', '1024M');
+
+        $reader = IOFactory::createReaderForFile($path);
+
+        // Styles, data validation and conditional formatting are not needed
+        // for inspection and can multiply a workbook's in-memory footprint.
+        // A large styled sheet can otherwise exhaust PHP's memory limit while
+        // the XLSX reader is still loading cells.
+        if (method_exists($reader, 'setReadDataOnly')) {
+            $reader->setReadDataOnly(true);
+        }
+
+        $spreadsheet = $reader->load($path);
 
         try {
             $sheets = [];
@@ -61,8 +85,12 @@ class WorkbookInspector
      */
     private function inspectSheet(array $sheets, string $sheetName, Worksheet $sheet): array
     {
-        $highestRow = $sheet->getHighestDataRow();
-        $highestCol = $sheet->getHighestDataColumn();
+        $highestRow = min($sheet->getHighestDataRow(), self::MAX_INSPECT_ROWS);
+        $highestColIndex = min(
+            Coordinate::columnIndexFromString($sheet->getHighestDataColumn()),
+            self::MAX_INSPECT_COLUMNS,
+        );
+        $highestCol = Coordinate::stringFromColumnIndex($highestColIndex);
 
         // --- header detection: rows 1..30 ---
         $headerRow = null;
@@ -199,7 +227,10 @@ class WorkbookInspector
 
     private function rowHasLabel(Worksheet $sheet, int $row, string $needle): bool
     {
-        $lastCol = Coordinate::columnIndexFromString($sheet->getHighestDataColumn());
+        $lastCol = min(
+            Coordinate::columnIndexFromString($sheet->getHighestDataColumn()),
+            self::MAX_INSPECT_COLUMNS,
+        );
         for ($c = 1; $c <= $lastCol; $c++) {
             if (str_contains(FieldMap::normalizeLabel($this->stringValue($sheet->getCell([$c, $row]))), $needle)) {
                 return true;

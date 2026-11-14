@@ -57,11 +57,12 @@ class ImportService
         $rows = [];
         $seenSourceIds = [];
         $seenNames = [];
+        $seenWeakNames = [];
         $seenGovIds = [];
         $counts = array_fill_keys(['new', 'update', 'unchanged', 'duplicate', 'invalid', 'review'], 0);
 
         foreach ($parsed as $item) {
-            $row = $this->classify($item, $existing, $batch, $seenSourceIds, $seenNames, $seenGovIds);
+            $row = $this->classify($item, $existing, $batch, $seenSourceIds, $seenNames, $seenWeakNames, $seenGovIds);
             $counts[$row['outcome']]++;
             $rows[] = $row;
         }
@@ -95,6 +96,39 @@ class ImportService
     }
 
     /**
+     * Count how many previewed rows the current decisions would insert. Used
+     * to warn before a full target batch silently rejects part of an import.
+     *
+     * @param  array<string, string>  $decisions  outcome => insert|update|skip|review
+     */
+    public function projectedInserts(ImportBatch $batch, array $decisions = []): int
+    {
+        return $batch->rows()
+            ->where('applied', false)
+            ->get()
+            ->filter(fn (ImportRow $row): bool => $this->effectiveDecision($row, $decisions) === 'insert')
+            ->count();
+    }
+
+    /**
+     * The coverage year for an import batch. One import batch is one
+     * coverage year; the batch's established program year wins, then its
+     * profiling date, then the profiling date chosen on the import page.
+     */
+    public function coverageYearForBatch(ImportBatch $batch): int
+    {
+        $targetBatch = $batch->beneficiaryBatch;
+
+        if ($targetBatch?->program_year !== null) {
+            return (int) $targetBatch->program_year;
+        }
+
+        $profiledOn = $targetBatch?->profiled_on ?? $batch->profiling_date;
+
+        return (int) ($profiledOn?->year ?? now()->year);
+    }
+
+    /**
      * Apply the confirmed batch in one transaction.
      *
      * @param  array<string, string>  $decisions  outcome => insert|update|skip|review
@@ -116,20 +150,22 @@ class ImportService
                     ? BeneficiaryBatch::query()->find($batch->beneficiary_batch_id)
                     : null;
                 $remainingSlots = $targetBatch?->remainingCapacity();
+                $coverageYear = $this->coverageYearForBatch($batch);
 
-                $batch->rows()->where('applied', false)->chunkById(200, function ($rows) use ($batch, $decisions, &$inserted, &$updated, &$skipped, &$flagged, &$failedRows, &$failureExcelRow, &$remainingSlots) {
+                $batch->rows()->where('applied', false)->chunkById(200, function ($rows) use ($batch, $decisions, $coverageYear, &$inserted, &$updated, &$skipped, &$flagged, &$failedRows, &$failureExcelRow, &$remainingSlots) {
                     foreach ($rows as $row) {
                         $decision = $this->effectiveDecision($row, $decisions);
 
                         try {
                             // Each row runs in its own savepoint: a rejected
                             // record never rolls back its neighbours.
-                            DB::transaction(function () use ($row, $batch, $decision, &$inserted, &$updated, &$skipped, &$flagged, &$remainingSlots) {
+                            DB::transaction(function () use ($row, $batch, $decision, $coverageYear, &$inserted, &$updated, &$skipped, &$flagged, &$remainingSlots) {
                                 match ($decision) {
-                                    'insert' => (function () use ($row, $batch, &$inserted, &$flagged, &$remainingSlots) {
+                                    'insert' => (function () use ($row, $batch, $coverageYear, &$inserted, &$flagged, &$remainingSlots) {
                                         $payload = $row->payload ?? [];
                                         unset($payload['birthdate_raw'], $payload['contact_no_raw']);
                                         $payload['import_batch_id'] = $batch->id;
+                                        $payload['coverage_year'] = $coverageYear;
                                         // The profiling date chosen on the import page
                                         // drives date-based reporting, not the upload time.
                                         $payload['profiled_on'] = $batch->profiling_date?->toDateString()
@@ -141,7 +177,7 @@ class ImportService
 
                                         // Race guard: recheck uniqueness right before
                                         // the insert instead of failing the whole batch.
-                                        $this->assertGovernmentIdAvailable($payload);
+                                        $this->assertGovernmentIdAvailable($payload, $coverageYear);
 
                                         // Capacity guard: the target batch may not
                                         // exceed its configured limit.
@@ -187,6 +223,9 @@ class ImportService
                                             // already set; only fill a missing one.
                                             if ($matched->profiled_on === null && $batch->profiling_date !== null) {
                                                 $payload['profiled_on'] = $batch->profiling_date;
+                                            }
+                                            if ($matched->coverage_year === null) {
+                                                $payload['coverage_year'] = $coverageYear;
                                             }
                                             $matched->update($payload);
                                             $updated++;
@@ -302,7 +341,7 @@ class ImportService
      *
      * @param  array<string, mixed>  $payload
      */
-    private function assertGovernmentIdAvailable(array $payload): void
+    private function assertGovernmentIdAvailable(array $payload, ?int $coverageYear = null): void
     {
         $govId = (string) ($payload['source_id_no'] ?? '');
 
@@ -313,6 +352,7 @@ class ImportService
         $exists = Beneficiary::query()
             ->where('source_id_no', $govId)
             ->where('origin_server_uuid', SyncIdentity::originUuid())
+            ->when($coverageYear !== null, fn ($query) => $query->where('coverage_year', $coverageYear))
             ->exists();
 
         if ($exists) {
@@ -343,13 +383,14 @@ class ImportService
 
         $payload['import_batch_id'] = $batch->id;
         $payload['profiled_on'] = $batch->profiling_date?->toDateString() ?? now()->toDateString();
+        $payload['coverage_year'] = $this->coverageYearForBatch($batch);
 
         if ($batch->beneficiary_batch_id) {
             $payload['beneficiary_batch_id'] = $batch->beneficiary_batch_id;
         }
 
         $this->resolveLocationCode($payload);
-        $this->assertGovernmentIdAvailable($payload);
+        $this->assertGovernmentIdAvailable($payload, $payload['coverage_year']);
 
         return Beneficiary::createWithCode($payload);
     }
@@ -467,7 +508,8 @@ class ImportService
             $nameKeys[] = RowParser::nameKey($payload);
         }
 
-        $base = Beneficiary::query();
+        $base = Beneficiary::query()
+            ->where('coverage_year', $this->coverageYearForBatch($batch));
 
         return [
             'by_code' => collect(array_unique($codes))
@@ -500,10 +542,11 @@ class ImportService
      * @param  array{by_code: array<string, Collection<int, Beneficiary>>, by_source_id_number: array<string, Collection<int, Beneficiary>>, by_name_key: array<string, Collection<int, Beneficiary>>}  $existing
      * @param  array<string, int>  $seenSourceIds
      * @param  array<string, int>  $seenNames
+     * @param  array<string, int>  $seenWeakNames
      * @param  array<string, int>  $seenGovIds
      * @return array<string, mixed>
      */
-    private function classify(array $item, array $existing, ImportBatch $batch, array &$seenSourceIds, array &$seenNames, array &$seenGovIds): array
+    private function classify(array $item, array $existing, ImportBatch $batch, array &$seenSourceIds, array &$seenNames, array &$seenWeakNames, array &$seenGovIds): array
     {
         $payload = $item['payload'];
         $messages = $item['messages'];
@@ -522,6 +565,11 @@ class ImportService
             // in-file duplicates (first occurrence wins)
             $sn = $payload['source_id_number'] ?? null;
             $nameSig = $nameKey.'|'.($hasBirthdate ? $birthdate : '');
+            $priorNameRow = $nameKey !== '||' ? ($seenWeakNames[$nameKey] ?? null) : null;
+
+            if ($nameKey !== '||') {
+                $seenWeakNames[$nameKey] ??= $item['excel_row'];
+            }
 
             $govId = trim((string) ($payload['source_id_no'] ?? ''));
 
@@ -539,6 +587,17 @@ class ImportService
             } elseif ($hasBirthdate && isset($seenNames[$nameSig])) {
                 $outcome = 'review';
                 $messages[] = ['severity' => 'warning', 'field' => 'first_name,last_name,birthdate', 'text' => 'in_file_duplicate: same normalized name and birthdate as Excel row '.$seenNames[$nameSig]];
+            } elseif ($priorNameRow !== null) {
+                // Match the registration verification modal: a same-name row
+                // with a different birthdate is held for review instead of
+                // being inserted automatically as a second person.
+                $outcome = 'review';
+                $messages[] = [
+                    'severity' => 'warning',
+                    'field' => 'first_name,middle_name,last_name',
+                    'text' => 'in_file_duplicate_name_weak: same normalized name as Excel row '.$priorNameRow
+                        .' but a different birthdate; review before creating a separate record.',
+                ];
             } else {
                 if ($sn !== null) {
                     $seenSourceIds[$sn] = $item['excel_row'];

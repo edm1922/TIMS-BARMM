@@ -626,4 +626,64 @@ class ImportDuplicateReviewTest extends TestCase
         $this->decide($batch, $row, 'skip', $this->staff())->assertForbidden();
         $this->assertNull($row->refresh()->review_action);
     }
+
+    public function test_in_file_same_name_with_a_different_birthdate_is_held_for_review(): void
+    {
+        $path = $this->makeWorkbook([
+            $this->sourceRow(9701, [
+                'C' => 'THENGRI',
+                'D' => 'KUMPAS',
+                'E' => 'KAMBALI',
+                'G' => \DateTime::createFromFormat('Y-m-d', '1979-07-22'),
+                'M' => 'U03-25-001967',
+            ]),
+            $this->sourceRow(9702, [
+                'C' => 'THENGRI',
+                'D' => 'KUMPAS',
+                'E' => 'KAMBALI',
+                'G' => \DateTime::createFromFormat('Y-m-d', '1988-10-13'),
+                'M' => '2843-9162-5685-2409',
+            ]),
+        ]);
+
+        $batch = $this->uploadAndPreview($path);
+        $admin = $this->admin();
+
+        $first = $batch->rows()->where('excel_row', 15)->firstOrFail();
+        $second = $batch->rows()->where('excel_row', 16)->firstOrFail();
+
+        $this->assertSame('new', $first->outcome);
+        $this->assertSame('review', $second->outcome);
+        $this->assertStringContainsString('in_file_duplicate_name_weak', json_encode($second->messages));
+
+        $this->apply($batch, $admin)->assertRedirect(route('imports.show', $batch));
+
+        $this->assertSame(1, Beneficiary::query()->where('last_name', 'KAMBALI')->count());
+        $this->assertSame('skip', $second->refresh()->operator_decision);
+    }
+
+    public function test_a_full_target_batch_prompts_and_blocks_apply(): void
+    {
+        $admin = $this->admin();
+        $batch = BeneficiaryBatch::factory()->create(['name' => 'Full Import Batch', 'capacity' => 1]);
+        Beneficiary::factory()->create(['beneficiary_batch_id' => $batch->id]);
+
+        $path = $this->makeWorkbook([$this->sourceRow(9601)]);
+        $import = $this->uploadAndPreview($path, null, $batch->id);
+
+        $page = $this->actingAs($admin)->get(route('imports.show', $import));
+        $page->assertOk()
+            ->assertSee('Target batch is full')
+            ->assertSee('data-capacity-blocked="1"', false);
+
+        $this->apply($import, $admin)
+            ->assertRedirect(route('imports.show', $import))
+            ->assertSessionHas('error');
+
+        $import->refresh();
+        $this->assertSame('previewed', $import->status);
+        $this->assertSame(0, $import->inserted);
+        $this->assertSame(1, $batch->fresh()->memberCount());
+        $this->assertSame(0, Beneficiary::query()->where('last_name', 'LAST9601')->count());
+    }
 }

@@ -197,9 +197,13 @@ class SyncNowService
                 $message .= sprintf(' %d record(s) are awaiting central review — they are not accepted yet.', $result['awaiting_review']);
             }
 
+            $status = (($result['failed'] ?? 0) > 0 || ($result['rejected'] ?? 0) > 0)
+                ? 'warning'
+                : 'ok';
+
             return [
                 'step' => 'upload',
-                'status' => 'ok',
+                'status' => $status,
                 'message' => $message,
                 'applied' => $result['applied'],
                 'conflicts' => $result['conflicts'],

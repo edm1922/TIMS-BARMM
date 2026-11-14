@@ -59,6 +59,8 @@ class SyncOperationService
         'employment_interest',
         'skills_training_needed',
         'notes',
+        'coverage_year',
+        'is_active',
     ];
 
     private const BENEFICIARY_BATCH_FIELDS = [

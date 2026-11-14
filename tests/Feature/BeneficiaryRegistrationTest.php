@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Beneficiary;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class BeneficiaryRegistrationTest extends TestCase
@@ -84,6 +85,89 @@ class BeneficiaryRegistrationTest extends TestCase
         $response->assertOk()
             ->assertJson(['duplicate' => true, 'rule' => 'name_birthdate'])
             ->assertJsonPath('matches.0.full_name', 'SAME NAME HERE');
+    }
+
+    public function test_duplicate_check_ignores_beneficiaries_from_a_prior_coverage_year(): void
+    {
+        $this->travelTo(Carbon::parse('2026-06-01 09:00:00'));
+
+        Beneficiary::factory()
+            ->named('YEARLY', 'PERSON', 'RETURNING')
+            ->withBirthdate('1990-01-01')
+            ->create(['coverage_year' => 2025]);
+
+        $staff = $this->staff();
+
+        $this->actingAs($staff)->postJson('/beneficiaries/duplicate-check', [
+            'first_name' => 'YEARLY',
+            'middle_name' => 'PERSON',
+            'last_name' => 'RETURNING',
+            'birthdate' => '1990-01-01',
+        ])->assertOk()->assertJson(['duplicate' => false]);
+
+        Beneficiary::factory()
+            ->named('YEARLY', 'PERSON', 'RETURNING')
+            ->withBirthdate('1990-01-01')
+            ->create(['coverage_year' => 2026]);
+
+        $this->actingAs($staff)->postJson('/beneficiaries/duplicate-check', [
+            'first_name' => 'YEARLY',
+            'middle_name' => 'PERSON',
+            'last_name' => 'RETURNING',
+            'birthdate' => '1990-01-01',
+        ])->assertOk()->assertJson(['duplicate' => true, 'rule' => 'name_birthdate']);
+    }
+
+    public function test_duplicate_check_returns_a_prior_year_profile_for_autofill(): void
+    {
+        $this->travelTo(Carbon::parse('2026-06-01 09:00:00'));
+
+        $prior = Beneficiary::factory()
+            ->named('RETURNING', 'PROFILE', 'PERSON')
+            ->withBirthdate('1988-04-04')
+            ->create([
+                'coverage_year' => 2025,
+                'source_id_no' => 'AUTOFILL-GOV-1',
+                'contact_no' => '09171234567',
+            ]);
+
+        $response = $this->actingAs($this->staff())->postJson('/beneficiaries/duplicate-check', [
+            'first_name' => 'RETURNING',
+            'middle_name' => 'PROFILE',
+            'last_name' => 'PERSON',
+            'birthdate' => '1988-04-04',
+        ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'duplicate' => false,
+                'autofill' => [
+                    'source_id_no' => 'AUTOFILL-GOV-1',
+                    'contact_no' => '09171234567',
+                ],
+                'previous_application' => [
+                    'coverage_year' => 2025,
+                ],
+            ])
+            ->assertJsonPath('previous_application.beneficiary_code', $prior->beneficiary_code);
+    }
+
+    public function test_duplicate_check_blocks_current_year_and_returns_no_autofill(): void
+    {
+        $this->travelTo(Carbon::parse('2026-06-01 09:00:00'));
+
+        Beneficiary::factory()
+            ->named('CURRENT', 'YEAR', 'DUPLICATE')
+            ->withBirthdate('1988-04-04')
+            ->create(['coverage_year' => 2026]);
+
+        $this->actingAs($this->staff())->postJson('/beneficiaries/duplicate-check', [
+            'first_name' => 'CURRENT',
+            'middle_name' => 'YEAR',
+            'last_name' => 'DUPLICATE',
+            'birthdate' => '1988-04-04',
+        ])->assertOk()
+            ->assertJson(['duplicate' => true, 'autofill' => null]);
     }
 
     public function test_duplicate_check_reports_no_match_for_new_person(): void
@@ -373,5 +457,30 @@ class BeneficiaryRegistrationTest extends TestCase
             ->assertSee('View beneficiary')
             ->assertSee('Add another')
             ->assertSee('beneficiaryCreatedModal');
+    }
+
+    public function test_server_rejects_a_weak_name_duplicate_even_when_the_client_flag_is_set(): void
+    {
+        $location = $this->seededLocation();
+        $batch = $this->seededBatch(['name' => 'Duplicate Gate Batch']);
+
+        Beneficiary::factory()
+            ->named('THENGRI', 'KUMPAS', 'KAMBALI')
+            ->withBirthdate('1979-07-22')
+            ->create();
+
+        $this->actingAs($this->staff())
+            ->from('/batches/'.$batch->id.'/beneficiaries/create')
+            ->post('/batches/'.$batch->id.'/beneficiaries', $this->beneficiaryPayload($location, [
+                'first_name' => 'THENGRI',
+                'middle_name' => 'KUMPAS',
+                'last_name' => 'KAMBALI',
+                'birthdate' => '1988-10-13',
+                'id_type' => 'NATIONAL ID',
+                'source_id_no' => '2843-9162-5685-2409',
+            ]))
+            ->assertSessionHasErrors('first_name');
+
+        $this->assertSame(1, Beneficiary::query()->where('last_name', 'KAMBALI')->count());
     }
 }

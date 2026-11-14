@@ -308,7 +308,9 @@
                                     </form>
                                 </div>
                                 <div class="col-md-7">
-                                    <form method="POST" action="{{ route('imports.invalid-options.resolve', $batch) }}" class="d-flex gap-2 flex-wrap">
+                                    <form method="POST" action="{{ route('imports.invalid-options.resolve', $batch) }}"
+                                          class="d-flex gap-2 flex-wrap" data-preserve-import-scroll
+                                          data-import-batch="{{ $batch->id }}">
                                         @csrf
                                         <input type="hidden" name="action" value="replace">
                                         <input type="hidden" name="field" value="{{ $option['field'] }}">
@@ -474,9 +476,25 @@
         @endif
 
         @if ($batch->status === 'previewed')
+            @if (! empty($capacityWarning))
+                <div class="alert alert-warning d-flex gap-2 align-items-start" role="alert">
+                    <div>
+                        <strong>Target batch is full.</strong>
+                        “{{ $capacityWarning['batch']->name }}” has
+                        {{ number_format($capacityWarning['members']) }} /
+                        {{ number_format((int) $capacityWarning['limit']) }} beneficiaries.
+                        This import would add {{ number_format($capacityWarning['projected']) }} new record(s),
+                        so applying it now would leave those rows out.
+                        Increase the batch limit or skip the new rows before applying.
+                        <a class="alert-link" href="{{ route('beneficiary-batches.show', $capacityWarning['batch']) }}">Manage batch</a>
+                    </div>
+                </div>
+            @endif
+
             {{-- D/E. Decisions and confirmation --}}
             <form method="POST" action="{{ route('imports.apply', $batch) }}" id="apply-form"
-                  data-counts="{{ json_encode($applyCounts) }}">
+                  data-counts="{{ json_encode($applyCounts) }}"
+                  data-capacity-blocked="{{ ! empty($capacityWarning) ? '1' : '0' }}">
                 @csrf
                 <div class="card imp-decisions mb-3">
                     <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -805,12 +823,60 @@
 (function () {
     'use strict';
 
+    // Applying a replacement is a normal form POST. Without this, the browser
+    // reloads at the top of the import page so the operator loses their place
+    // in the invalid-options list. Preserve the viewport position across the
+    // redirect so consecutive replacements can be handled without scrolling.
+    var preserveForms = document.querySelectorAll('[data-preserve-import-scroll]');
+
+    if (preserveForms.length > 0) {
+        if ('scrollRestoration' in window.history) {
+            window.history.scrollRestoration = 'manual';
+        }
+
+        var key = 'imports:invalid-options:scroll:' + (preserveForms[0].getAttribute('data-import-batch') || '');
+
+        try {
+            var saved = window.sessionStorage.getItem(key);
+
+            if (saved !== null) {
+                window.sessionStorage.removeItem(key);
+                var restore = function () {
+                    window.scrollTo(0, parseInt(saved, 10) || 0);
+                };
+
+                window.requestAnimationFrame(function () {
+                    restore();
+                    window.setTimeout(restore, 50);
+                });
+            }
+        } catch (error) {
+            // sessionStorage can be unavailable in private browser modes.
+        }
+
+        preserveForms.forEach(function (form) {
+            form.addEventListener('submit', function () {
+                try {
+                    window.sessionStorage.setItem(key, String(window.scrollY));
+                } catch (error) {
+                    // Ignore storage failures; the form still submits.
+                }
+            });
+        });
+    }
+})();
+</script>
+<script>
+(function () {
+    'use strict';
+
     var form = document.getElementById('apply-form');
 
     if (!form) {
         return;
     }
 
+    var capacityBlocked = form.dataset.capacityBlocked === '1';
     var confirmBox = document.getElementById('confirm');
     var applyButton = document.getElementById('apply-button');
     var applyLabel = form.querySelector('[data-imp-apply-label]');
@@ -871,13 +937,15 @@
         var confirmed = confirmBox ? confirmBox.checked : false;
 
         if (applyButton) {
-            applyButton.disabled = !confirmed;
+            applyButton.disabled = !confirmed || capacityBlocked;
         }
 
         if (gate) {
-            gate.textContent = confirmed
-                ? 'Ready to apply. This writes to the beneficiaries table in one transaction.'
-                : 'Confirm the summary above to unlock applying.';
+            gate.textContent = capacityBlocked
+                ? 'The target batch is full. Raise its capacity or skip the new rows before applying.'
+                : (confirmed
+                    ? 'Ready to apply. This writes to the beneficiaries table in one transaction.'
+                    : 'Confirm the summary above to unlock applying.');
         }
     }
 

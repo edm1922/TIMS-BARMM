@@ -213,7 +213,7 @@
                                         </a>
                                     </li>
                                 @endif
-                                @if (Route::has('imports.create') && auth()->user()->canAccessImports())
+                                @if (Route::has('imports.create') && auth()->user()->canAccessImports() && \App\Support\SyncIdentity::isOnline())
                                     <li class="nav-item">
                                         <a class="nav-link {{ request()->routeIs('imports.*') ? 'active' : '' }}"
                                            href="{{ route('imports.create') }}">

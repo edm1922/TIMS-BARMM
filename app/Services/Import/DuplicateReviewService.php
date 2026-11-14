@@ -49,8 +49,9 @@ class DuplicateReviewService
             : Beneficiary::query()->with('beneficiaryBatch')->whereIn('id', $existingIds)->get()->keyBy('id');
 
         $originUuid = SyncIdentity::originUuid();
+        $coverageYear = $this->coverageYear($batch);
 
-        return $rows->map(function (ImportRow $row) use ($batch, $existing, $originUuid): array {
+        return $rows->map(function (ImportRow $row) use ($batch, $existing, $originUuid, $coverageYear): array {
             $matched = $existing->get($row->matched_beneficiary_id);
             $payload = $row->payload ?? [];
 
@@ -61,6 +62,7 @@ class DuplicateReviewService
                     && Beneficiary::query()
                         ->where('source_id_no', $govId)
                         ->where('origin_server_uuid', $originUuid)
+                        ->where('coverage_year', $coverageYear)
                         ->exists(),
                 'government_id_in_file' => true,
                 default => false,
@@ -211,7 +213,23 @@ class DuplicateReviewService
         return Beneficiary::query()
             ->where('source_id_no', $govId)
             ->where('origin_server_uuid', SyncIdentity::originUuid())
+            ->where('coverage_year', $this->coverageYear($row->batch))
             ->exists();
+    }
+
+    private function coverageYear(?ImportBatch $batch): int
+    {
+        if ($batch === null) {
+            return (int) now()->year;
+        }
+
+        $targetBatch = $batch->beneficiaryBatch;
+
+        if ($targetBatch?->program_year !== null) {
+            return (int) $targetBatch->program_year;
+        }
+
+        return (int) (($targetBatch?->profiled_on ?? $batch->profiling_date)?->year ?? now()->year);
     }
 
     private function rowStatus(ImportRow $row): string

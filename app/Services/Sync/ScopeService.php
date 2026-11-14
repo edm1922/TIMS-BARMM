@@ -208,6 +208,128 @@ class ScopeService
     }
 
     /**
+     * Grouped area choices for the first-time onboarding form.
+     *
+     * The option value encodes the level and PSGC code so the form can expose
+     * one "Area served" control instead of three separate inputs.
+     *
+     * @return array<string, array<int, array{value: string, label: string}>>
+     */
+    public function areaOptions(): array
+    {
+        $groups = [
+            'BARMM' => [
+                ['value' => 'region|'.self::REGION_SENTINEL, 'label' => 'Entire BARMM Region'],
+            ],
+        ];
+
+        $provinceSeen = [];
+        $citySeen = [];
+
+        $locations = Location::query()
+            ->whereNotNull('province')
+            ->orderBy('province')
+            ->orderBy('city_municipality')
+            ->orderBy('barangay')
+            ->get(['psgc_code', 'province', 'city_municipality', 'barangay', 'full_address']);
+
+        foreach ($locations as $location) {
+            $province = trim((string) $location->province);
+            $code = trim((string) $location->psgc_code);
+
+            if ($province === '' || $code === '') {
+                continue;
+            }
+
+            $groups[$province] ??= [];
+
+            $provinceCode = substr($code, 0, 4);
+
+            if ($provinceCode !== '' && ! isset($provinceSeen[$provinceCode])) {
+                $provinceSeen[$provinceCode] = true;
+                $groups[$province][] = [
+                    'value' => 'province|'.$provinceCode,
+                    'label' => $province.' (Province)',
+                ];
+            }
+
+            $city = trim((string) $location->city_municipality);
+            $cityCode = substr($code, 0, 7);
+
+            if ($city !== '' && $cityCode !== '' && ! isset($citySeen[$cityCode])) {
+                $citySeen[$cityCode] = true;
+                $groups[$province][] = [
+                    'value' => 'city_municipality|'.$cityCode,
+                    'label' => $city.', '.$province,
+                ];
+            }
+
+            $barangay = trim((string) $location->barangay);
+
+            if ($barangay !== '') {
+                $groups[$province][] = [
+                    'value' => 'barangay|'.$code,
+                    'label' => $barangay.', '.$city,
+                ];
+            }
+        }
+
+        return $groups;
+    }
+
+    /**
+     * Resolve a single onboarding area value back into the stored scope fields.
+     *
+     * @return array{scope_type: string, scope_code: string, area_name: string}|null
+     */
+    public function areaSelection(string $value): ?array
+    {
+        [$type, $code] = array_pad(explode('|', trim($value), 2), 2, '');
+        $type = trim($type);
+        $code = trim($code);
+
+        if ($type === self::SCOPE_TYPE_REGION) {
+            return $code === self::REGION_SENTINEL
+                ? ['scope_type' => $type, 'scope_code' => $code, 'area_name' => 'Entire BARMM Region']
+                : null;
+        }
+
+        if ($code === '' || ! in_array($type, ['province', 'city_municipality', 'barangay'], true)) {
+            return null;
+        }
+
+        $location = match ($type) {
+            'province' => Location::query()->whereRaw('SUBSTR(psgc_code, 1, 4) = ?', [$code])->first(),
+            'city_municipality' => Location::query()->whereRaw('SUBSTR(psgc_code, 1, 7) = ?', [$code])->first(),
+            'barangay' => Location::query()->where('psgc_code', $code)->first(),
+            default => null,
+        };
+
+        if ($location === null) {
+            return null;
+        }
+
+        $areaName = match ($type) {
+            'province' => trim((string) $location->province),
+            'city_municipality' => trim(implode(', ', array_filter([
+                trim((string) $location->city_municipality),
+                trim((string) $location->province),
+            ]))),
+            default => trim((string) ($location->full_address ?: $location->barangay)),
+        };
+
+        if ($areaName === '') {
+            return null;
+        }
+
+        return [
+            'scope_type' => $type,
+            'scope_code' => $code,
+            'area_name' => $areaName,
+        ];
+    }
+
+    /**
      * A short reference of valid province codes, for use as helper text next
      * to scope inputs.
      */

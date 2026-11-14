@@ -140,11 +140,33 @@
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
                     Export CSV
                 </a>
-                <a class="sync-btn sync-btn--primary"
-                   href="{{ route('reports.export', array_merge($filters, ['format' => 'xlsx'])) }}">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                    Export XLSX
-                </a>
+                @if ($filters['batch'] === '')
+                    <div class="dropdown">
+                        <button class="sync-btn sync-btn--primary dropdown-toggle" type="button"
+                                data-bs-toggle="dropdown" aria-expanded="false">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                            Export XLSX
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" href="{{ route('reports.export', array_merge($filters, ['format' => 'xlsx', 'xlsx_mode' => 'per_batch'])) }}">
+                                    Per batch (separate sheets)
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ route('reports.export', array_merge($filters, ['format' => 'xlsx', 'xlsx_mode' => 'single'])) }}">
+                                    All records in one list
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                @else
+                    <a class="sync-btn sync-btn--primary"
+                       href="{{ route('reports.export', array_merge($filters, ['format' => 'xlsx'])) }}">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                        Export XLSX
+                    </a>
+                @endif
             </div>
         @endcan
     </header>

@@ -40,7 +40,7 @@ class OnboardingController extends Controller
 
         return view('onboarding.show', [
             'bootstrapUrl' => $this->bootstrapUrl(),
-            'scopeSuggestions' => $scopes->provinceSuggestions(),
+            'areaOptions' => $scopes->areaOptions(),
         ]);
     }
 
@@ -59,9 +59,10 @@ class OnboardingController extends Controller
             'manager_name' => ['required', 'string', 'max:255'],
             'manager_username' => ['required', 'string', 'max:50', 'alpha_dash', 'unique:users,username'],
             'manager_password' => ['required', 'string', 'min:12', 'confirmed'],
-            'area_name' => ['required', 'string', 'max:120'],
-            'scope_type' => ['required', 'in:region,province,city_municipality,barangay'],
-            'scope_code' => ['required', 'string', 'regex:/^(BARMM|\d{4,10})$/'],
+            'area' => ['nullable', 'required_without_all:area_name,scope_type,scope_code', 'string', 'max:64', 'regex:/^(region|province|city_municipality|barangay)\|(BARMM|\d{4,10})$/'],
+            'area_name' => ['required_without:area', 'string', 'max:120'],
+            'scope_type' => ['required_without:area', 'in:region,province,city_municipality,barangay'],
+            'scope_code' => ['required_without:area', 'string', 'regex:/^(BARMM|\d{4,10})$/'],
         ]);
 
         $bootstrapUrl = $this->bootstrapUrl();
@@ -70,6 +71,20 @@ class OnboardingController extends Controller
             return back()->withInput()->withErrors([
                 'enrollment_token' => 'This installation was not provisioned with a trusted Central Server address. Reinstall from a package that includes SYNC_BOOTSTRAP_URL, or set it in .env.',
             ]);
+        }
+
+        if (! empty($data['area'])) {
+            $selection = $scopes->areaSelection($data['area']);
+
+            if ($selection === null) {
+                return back()->withInput()->withErrors([
+                    'area' => 'Select a valid BARMM region, province, city/municipality, or barangay.',
+                ]);
+            }
+
+            $data['scope_type'] = $selection['scope_type'];
+            $data['scope_code'] = $selection['scope_code'];
+            $data['area_name'] = $selection['area_name'];
         }
 
         if ($data['scope_type'] === ScopeService::SCOPE_TYPE_REGION) {

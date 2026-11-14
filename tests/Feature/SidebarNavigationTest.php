@@ -192,4 +192,30 @@ class SidebarNavigationTest extends TestCase
             ->assertSee('apple-touch-icon.png', false)
             ->assertSee('<meta name="theme-color" content="#2c3340">', false);
     }
+
+    public function test_the_offline_installation_uses_the_same_global_shell_as_central(): void
+    {
+        config()->set('sync.instance_mode', 'offline');
+
+        $this->actingAs($this->manager())->get('/beneficiaries')
+            ->assertOk()
+            ->assertSee('gips-topbar', false)
+            ->assertSee('id="appSidebar"', false)
+            ->assertSee('id="sidebarMenuToggle"', false)
+            ->assertSee('app-sidebar-profile', false)
+            ->assertSee('TUPAD INFORMATION MANAGEMENT SYSTEM OF BARMM')
+            ->assertSee('TIMS-BARMM');
+    }
+
+    public function test_offline_installations_have_no_excel_import_entry_or_route(): void
+    {
+        config()->set('sync.instance_mode', 'offline');
+
+        $this->actingAs($this->admin())->get('/beneficiaries')
+            ->assertOk()
+            ->assertDontSee('Excel Import');
+
+        $this->actingAs($this->admin())->get('/imports/create')->assertNotFound();
+        $this->actingAs($this->admin())->get('/imports')->assertNotFound();
+    }
 }

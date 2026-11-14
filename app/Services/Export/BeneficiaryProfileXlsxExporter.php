@@ -52,19 +52,56 @@ class BeneficiaryProfileXlsxExporter
      */
     public static function download(string $filename, iterable $beneficiaries, array $location = []): BinaryFileResponse
     {
-        $spreadsheet = new Spreadsheet;
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Sheet1');
+        return self::downloadWorkbook($filename, [[
+            'name' => 'Sheet1',
+            'beneficiaries' => $beneficiaries,
+            'location' => $location,
+        ]]);
+    }
 
-        self::applyColumns($sheet);
-        self::writeTitleBlock($sheet, $location);
-        self::writeHeader($sheet);
-        self::writeRows($sheet, $beneficiaries);
-        self::applyPageSetup($sheet);
+    /**
+     * One worksheet per batch for an all-batches export. Each section carries
+     * its own batch name and location so the Annex D masthead stays correct.
+     *
+     * @param  iterable<array{name: string, beneficiaries: iterable<Beneficiary>, location: array<string, mixed>}>  $sections
+     */
+    public static function downloadByBatch(string $filename, iterable $sections): BinaryFileResponse
+    {
+        return self::downloadWorkbook($filename, $sections);
+    }
+
+    /**
+     * @param  iterable<array{name: string, beneficiaries: iterable<Beneficiary>, location: array<string, mixed>}>  $sections
+     */
+    private static function downloadWorkbook(string $filename, iterable $sections): BinaryFileResponse
+    {
+        // Generating the Annex D workbook is CPU-heavy for multi-thousand-row
+        // reports. Do not let the web server's default execution limit turn a
+        // large export into a 500.
+        @set_time_limit(0);
+        @ini_set('memory_limit', '1024M');
+
+        $spreadsheet = new Spreadsheet;
+        $usedTitles = [];
+        $first = true;
+
+        foreach ($sections as $section) {
+            $sheet = $first ? $spreadsheet->getActiveSheet() : $spreadsheet->createSheet();
+            $first = false;
+
+            $sheet->setTitle(self::sheetTitle((string) ($section['name'] ?? 'Sheet1'), $usedTitles));
+            self::buildSheet($sheet, $section['beneficiaries'] ?? [], $section['location'] ?? []);
+        }
+
+        if ($first) {
+            $spreadsheet->getActiveSheet()->setTitle('Sheet1');
+        }
 
         $base = tempnam(sys_get_temp_dir(), 'tims-export-');
         $path = $base.'.xlsx';
-        (new Xlsx($spreadsheet))->save($path);
+        $writer = new Xlsx($spreadsheet);
+        $writer->setPreCalculateFormulas(false);
+        $writer->save($path);
         @unlink($base);
         $spreadsheet->disconnectWorksheets();
         unset($spreadsheet);
@@ -72,6 +109,45 @@ class BeneficiaryProfileXlsxExporter
         return response()->download($path, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * @param  iterable<Beneficiary>  $beneficiaries
+     * @param  array<string, mixed>  $location
+     */
+    private static function buildSheet(Worksheet $sheet, iterable $beneficiaries, array $location): void
+    {
+        self::applyColumns($sheet);
+        self::writeTitleBlock($sheet, $location);
+        self::writeHeader($sheet);
+        $lastRow = self::writeRows($sheet, $beneficiaries);
+        self::styleDataRows($sheet, self::FIRST_DATA_ROW, $lastRow);
+        self::applyPageSetup($sheet);
+    }
+
+    /**
+     * @param  list<string>  $usedTitles
+     */
+    private static function sheetTitle(string $name, array &$usedTitles): string
+    {
+        $base = trim((string) preg_replace('/[\[\]:*?\/\\\\]+/u', ' ', $name));
+        $base = trim((string) preg_replace('/\s+/u', ' ', $base));
+
+        if ($base === '') {
+            $base = 'Batch';
+        }
+
+        $title = mb_substr($base, 0, 31);
+        $suffix = 2;
+
+        while (in_array($title, $usedTitles, true)) {
+            $tail = ' ('.$suffix++.')';
+            $title = mb_substr($base, 0, 31 - mb_strlen($tail)).$tail;
+        }
+
+        $usedTitles[] = $title;
+
+        return $title;
     }
 
     private static function applyColumns(Worksheet $sheet): void
@@ -203,8 +279,9 @@ class BeneficiaryProfileXlsxExporter
 
     /**
      * @param  iterable<Beneficiary>  $beneficiaries
+     * @return int the last written Excel row
      */
-    private static function writeRows(Worksheet $sheet, iterable $beneficiaries): void
+    private static function writeRows(Worksheet $sheet, iterable $beneficiaries): int
     {
         $row = self::FIRST_DATA_ROW;
         $number = 1;
@@ -251,45 +328,55 @@ class BeneficiaryProfileXlsxExporter
             }
 
             $sheet->getRowDimension($row)->setRowHeight(39);
-            self::styleDataRow($sheet, $row);
 
             $row++;
             $number++;
         }
+
+        return $row - 1;
     }
 
-    private static function styleDataRow(Worksheet $sheet, int $row): void
+    /**
+     * Apply the data-row styles once over whole column ranges. Styling every
+     * cell individually is O(rows x columns) and is the main reason large
+     * exports exceeded the request time limit.
+     */
+    private static function styleDataRows(Worksheet $sheet, int $firstRow, int $lastRow): void
     {
-        $sheet->getStyle('A'.$row)->getFont()->setName('Calibri Light')->setSize(14);
-        $sheet->getStyle('A'.$row)->getAlignment()
+        if ($lastRow < $firstRow) {
+            return;
+        }
+
+        $sheet->getStyle('A'.$firstRow.':A'.$lastRow)->getFont()->setName('Calibri Light')->setSize(14);
+        $sheet->getStyle('A'.$firstRow.':A'.$lastRow)->getAlignment()
             ->setHorizontal(Alignment::HORIZONTAL_CENTER)
             ->setVertical(Alignment::VERTICAL_CENTER)
             ->setWrapText(true);
 
-        $sheet->getStyle('B'.$row.':X'.$row)->getFont()->setName('Calibri')->setSize(11);
-        $sheet->getStyle('B'.$row.':X'.$row)->getAlignment()
+        $sheet->getStyle('B'.$firstRow.':X'.$lastRow)->getFont()->setName('Calibri')->setSize(11);
+        $sheet->getStyle('B'.$firstRow.':X'.$lastRow)->getAlignment()
             ->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getStyle('B'.$row.':X'.$row)->getBorders()->getAllBorders()
+        $sheet->getStyle('B'.$firstRow.':X'.$lastRow)->getBorders()->getAllBorders()
             ->setBorderStyle(Border::BORDER_THIN)
             ->getColor()->setARGB('FF000000');
 
-        $sheet->getStyle('C'.$row)->getFont()->setSize(12);
-        $sheet->getStyle('C'.$row)->getAlignment()
+        $sheet->getStyle('C'.$firstRow.':C'.$lastRow)->getFont()->setSize(12);
+        $sheet->getStyle('C'.$firstRow.':C'.$lastRow)->getAlignment()
             ->setHorizontal(Alignment::HORIZONTAL_CENTER)
             ->setWrapText(true);
 
-        $sheet->getStyle('W'.$row)->getFont()->setSize(12);
-        $sheet->getStyle('W'.$row)->getAlignment()
+        $sheet->getStyle('W'.$firstRow.':W'.$lastRow)->getFont()->setSize(12);
+        $sheet->getStyle('W'.$firstRow.':W'.$lastRow)->getAlignment()
             ->setHorizontal(Alignment::HORIZONTAL_CENTER)
             ->setWrapText(true);
 
         foreach (['B', 'H', 'L', 'R', 'S', 'T', 'U'] as $column) {
-            $sheet->getStyle($column.$row)->getAlignment()
+            $sheet->getStyle($column.$firstRow.':'.$column.$lastRow)->getAlignment()
                 ->setHorizontal(Alignment::HORIZONTAL_CENTER);
         }
 
         foreach (['D', 'E', 'F', 'G', 'I', 'J', 'K', 'M', 'N', 'O', 'P', 'Q', 'V', 'X'] as $column) {
-            $sheet->getStyle($column.$row)->getAlignment()
+            $sheet->getStyle($column.$firstRow.':'.$column.$lastRow)->getAlignment()
                 ->setHorizontal(Alignment::HORIZONTAL_LEFT)
                 ->setWrapText(true);
         }

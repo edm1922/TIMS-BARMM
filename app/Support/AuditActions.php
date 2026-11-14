@@ -28,6 +28,7 @@ final class AuditActions
         'Beneficiaries' => [
             'beneficiary.created' => 'Registered a beneficiary',
             'beneficiary.updated' => 'Edited a beneficiary',
+            'beneficiary.cos_no_set' => 'Added a COS No.',
             'beneficiary.deleted' => 'Deleted a beneficiary',
             'beneficiary.duplicate_resolved' => 'Resolved a duplicate',
             'beneficiary.import_collision_restored' => 'Restored after an import collision',

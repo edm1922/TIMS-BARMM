@@ -63,12 +63,30 @@ class UserController extends Controller
             ->limit(100)
             ->get();
 
+        $centralCounts = User::query()
+            ->selectRaw('role, COUNT(*) as aggregate')
+            ->groupBy('role')
+            ->pluck('aggregate', 'role');
+
+        $offlineCounts = OfflineServerEncoder::query()
+            ->selectRaw('role, COUNT(*) as aggregate')
+            ->groupBy('role')
+            ->pluck('aggregate', 'role');
+
+        $centralTotal = (int) $centralCounts->sum();
+        $offlineTotal = (int) $offlineCounts->sum();
+
         $roleCounts = [
-            'total' => User::count(),
-            'admin' => User::where('role', User::ROLE_ADMIN)->count(),
-            'encoder' => User::where('role', User::ROLE_ENCODER)->count(),
-            'staff' => User::where('role', User::ROLE_STAFF)->count(),
-            'inactive' => User::where('is_active', false)->count(),
+            'total' => $centralTotal + $offlineTotal,
+            'central_total' => $centralTotal,
+            'offline_total' => $offlineTotal,
+            'admin' => (int) ($centralCounts[User::ROLE_ADMIN] ?? 0),
+            'encoder' => (int) ($centralCounts[User::ROLE_ENCODER] ?? 0)
+                + (int) ($offlineCounts[User::ROLE_ENCODER] ?? 0),
+            'manager' => (int) ($centralCounts[User::ROLE_MANAGER] ?? 0)
+                + (int) ($offlineCounts[User::ROLE_MANAGER] ?? 0),
+            'inactive' => User::query()->where('is_active', false)->count()
+                + OfflineServerEncoder::query()->where('is_active', false)->count(),
         ];
 
         return view('users.index', [

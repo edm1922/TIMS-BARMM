@@ -10,6 +10,7 @@ use App\Support\BeneficiaryOptions;
 use App\Support\NameNormalizer;
 use App\Support\SyncIdentity;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -41,6 +42,8 @@ class Beneficiary extends Model
         'birthdate',
         'birthdate_raw',
         'profiled_on',
+        'coverage_year',
+        'is_active',
         'barangay',
         'city_municipality',
         'province',
@@ -116,6 +119,8 @@ class Beneficiary extends Model
         return [
             'birthdate' => 'date',
             'profiled_on' => 'date',
+            'coverage_year' => 'integer',
+            'is_active' => 'boolean',
             'archived_at' => 'datetime',
             'avg_monthly_income' => 'decimal:2',
             'age_source' => 'integer',
@@ -133,6 +138,8 @@ class Beneficiary extends Model
             $beneficiary->server_revision ??= 1;
             $beneficiary->sync_status ??= 'synced';
             $beneficiary->conflict_status ??= 'none';
+            $beneficiary->coverage_year ??= (int) ($beneficiary->profiled_on?->year ?? now()->year);
+            $beneficiary->is_active ??= true;
 
             if (! $beneficiary->beneficiary_code) {
                 $generator = app(BeneficiaryIdGenerator::class);
@@ -163,6 +170,7 @@ class Beneficiary extends Model
                     $beneficiary->middle_name,
                     $beneficiary->last_name,
                     $beneficiary->birthdate?->toDateString(),
+                    coverageYear: $beneficiary->coverage_year,
                 );
 
                 if ($candidates !== null) {
@@ -258,12 +266,17 @@ class Beneficiary extends Model
 
     public function scopeActive(Builder $query): Builder
     {
-        return $query->whereNull('archived_at');
+        return $query->whereNull('archived_at')->where('is_active', true);
     }
 
     public function scopeArchived(Builder $query): Builder
     {
         return $query->whereNotNull('archived_at');
+    }
+
+    public function scopeInactive(Builder $query): Builder
+    {
+        return $query->whereNull('archived_at')->where('is_active', false);
     }
 
     /**
@@ -345,9 +358,36 @@ class Beneficiary extends Model
         });
     }
 
+    /**
+     * All annual application records belonging to the same person. A
+     * government ID is the strongest identity key; records without one fall
+     * back to normalized name + birthdate.
+     *
+     * @return Collection<int, static>
+     */
+    public function applicationTimeline(): Collection
+    {
+        return static::query()
+            ->when(
+                $this->source_id_no !== null && trim((string) $this->source_id_no) !== '',
+                fn (Builder $query) => $query->where('source_id_no', trim((string) $this->source_id_no)),
+                fn (Builder $query) => $query->where('name_key', $this->name_key)
+                    ->when($this->birthdate !== null, fn (Builder $q) => $q->whereDate('birthdate', $this->birthdate)),
+            )
+            ->orderBy('coverage_year')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+    }
+
     public function isArchived(): bool
     {
         return $this->archived_at !== null;
+    }
+
+    public function isInactive(): bool
+    {
+        return ! $this->is_active && $this->archived_at === null;
     }
 
     /**

@@ -203,7 +203,9 @@ class ImportInvalidOptionTest extends TestCase
             ->assertSee('1 affected')
             ->assertSee('as a new option')
             ->assertSee('Replace with')
-            ->assertSee(route('imports.invalid-options.resolve', $batch), false);
+            ->assertSee(route('imports.invalid-options.resolve', $batch), false)
+            ->assertSee('data-preserve-import-scroll', false)
+            ->assertSee('imports:invalid-options:scroll:', false);
 
         $options = $response->viewData('invalidOptions');
         $this->assertCount(1, $options);

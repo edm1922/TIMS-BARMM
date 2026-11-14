@@ -50,6 +50,8 @@ Route::middleware('auth')->group(function () {
     Route::put('/beneficiaries/{beneficiary}', [BeneficiaryController::class, 'update'])
         ->middleware('offline.authorized')
         ->name('beneficiaries.update');
+    Route::post('/beneficiaries/{beneficiary}/cos-no', [BeneficiaryController::class, 'updateCosNo'])
+        ->name('beneficiaries.cos-no');
     Route::post('/beneficiaries/{beneficiary}/archive', [BeneficiaryController::class, 'archive'])
         ->middleware('offline.authorized')
         ->name('beneficiaries.archive');
@@ -91,7 +93,10 @@ Route::middleware('auth')->group(function () {
         ->middleware(['role:admin,manager', 'offline.authorized'])
         ->name('beneficiary-batches.members.store');
 
-    Route::middleware('role:admin,staff')->group(function () {
+    // Excel imports are a central-server workflow. Offline installations
+    // receive beneficiaries through sync, so the import entry points are not
+    // available there at all.
+    Route::middleware(['role:admin,staff', 'instance.mode:online'])->group(function () {
         Route::get('/imports', [ImportController::class, 'index'])->name('imports.index');
         Route::get('/imports/create', [ImportController::class, 'create'])->name('imports.create');
         Route::post('/imports', [ImportController::class, 'store'])

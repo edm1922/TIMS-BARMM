@@ -9,20 +9,40 @@ use App\Services\Sync\SyncOperationService;
 use App\Services\Sync\SyncRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class OperationController extends Controller
 {
     public function store(Request $request, SyncOperationService $operations, SyncRequestService $requests): JsonResponse
     {
-        $data = $request->validate([
-            'operations' => ['required', 'array', 'min:1', 'max:100'],
-            'operations.*.operation_uuid' => ['required', 'uuid'],
-            'operations.*.entity_type' => ['required', 'in:beneficiary,beneficiary_batch'],
-            'operations.*.entity_uuid' => ['required', 'uuid'],
-            'operations.*.operation' => ['required', 'in:created,updated,deleted,archived,unarchived,restored'],
-            'operations.*.base_revision' => ['nullable', 'integer', 'min:0'],
-            'operations.*.payload' => ['present', 'array'],
-        ]);
+        try {
+            $data = $request->validate([
+                'operations' => ['required', 'array', 'min:1', 'max:100'],
+                'operations.*.operation_uuid' => ['required', 'uuid'],
+                'operations.*.entity_type' => ['required', 'in:beneficiary,beneficiary_batch'],
+                'operations.*.entity_uuid' => ['required', 'uuid'],
+                'operations.*.operation' => ['required', 'in:created,updated,deleted,archived,unarchived,restored'],
+                'operations.*.base_revision' => ['nullable', 'integer', 'min:0'],
+                'operations.*.payload' => ['present', 'array'],
+            ]);
+        } catch (ValidationException $exception) {
+            $operations = $request->input('operations');
+            $sample = is_array($operations) && isset($operations[0]) && is_array($operations[0])
+                ? array_intersect_key($operations[0], array_flip([
+                    'operation_uuid', 'entity_type', 'entity_uuid', 'operation', 'base_revision',
+                ]))
+                : null;
+
+            Log::warning('sync.operations.validation_failed', [
+                'server_uuid' => optional($request->attributes->get('sync_server'))->server_uuid,
+                'operation_count' => is_array($operations) ? count($operations) : null,
+                'errors' => $exception->errors(),
+                'sample' => $sample,
+            ]);
+
+            throw $exception;
+        }
 
         $server = $this->server($request);
 

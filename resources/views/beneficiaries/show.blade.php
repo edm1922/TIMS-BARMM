@@ -7,6 +7,10 @@
     $ageStatus = $beneficiary->ageStatus();
     $identityFields = [
         'Beneficiary ID' => '<span class="font-monospace">' . e($beneficiary->beneficiary_code) . '</span>',
+        'Coverage year' => e((string) ($beneficiary->coverage_year ?? '—')),
+        'Record status' => $beneficiary->isInactive()
+            ? '<span class="sync-pill sync-pill--neutral">Inactive</span>'
+            : '<span class="sync-pill sync-pill--ok">Active</span>',
         'Age status' => view('partials.age-badge', ['status' => $ageStatus])->render(),
         'Birthdate' => $beneficiary->birthdate?->format('Y-m-d') . ($ageStatus === 'unknown' ? ' <span class="text-warning small">(missing or not yet valid)</span>' : ''),
         'Age (computed)' => $beneficiary->computedAge() ?? '—',
@@ -146,6 +150,60 @@
             <div class="sync-stat-note">Release group for payout/verification.</div>
         </article>
     </section>
+
+    @if ($timeline->count() > 1)
+        <section class="sync-card" aria-labelledby="benef-application-timeline-title">
+            <div class="sync-section-head">
+                <div>
+                    <h2 class="benef-section-title" id="benef-application-timeline-title">Application timeline</h2>
+                    <p class="benef-section-subtitle">Annual application records for the same beneficiary, consolidated on this page.</p>
+                </div>
+                <span class="sync-pill sync-pill--info">{{ $timeline->count() }} applications</span>
+            </div>
+            <div class="sync-body">
+                <div class="table-responsive">
+                    <table class="table panel-table mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Year</th>
+                                <th>Beneficiary ID</th>
+                                <th>Batch</th>
+                                <th>Status</th>
+                                <th>Recorded</th>
+                                <th class="text-end">Open</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($timeline as $application)
+                                <tr @if ($application->id === $beneficiary->id) style="background:#eff6ff;" @endif>
+                                    <td class="text-nowrap fw-semibold">{{ $application->coverage_year ?? '—' }}</td>
+                                    <td class="font-monospace small">{{ $application->beneficiary_code }}</td>
+                                    <td>{{ $application->beneficiaryBatch?->name ?? 'Unassigned' }}</td>
+                                    <td>
+                                        @if ($application->archived_at !== null)
+                                            <span class="sync-pill sync-pill--neutral">Archived</span>
+                                        @elseif (! $application->is_active)
+                                            <span class="sync-pill sync-pill--neutral">Inactive</span>
+                                        @else
+                                            <span class="sync-pill sync-pill--ok">Active</span>
+                                        @endif
+                                    </td>
+                                    <td class="text-muted small">{{ $application->created_at?->format('Y-m-d') }}</td>
+                                    <td class="text-end">
+                                        @if ($application->id !== $beneficiary->id)
+                                            <a class="sync-btn sync-btn--secondary sync-btn--small" href="{{ route('beneficiaries.show', $application) }}">View</a>
+                                        @else
+                                            <span class="text-muted small">Current</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    @endif
 
     @can('delete', $beneficiary)
         <div class="modal fade" id="deleteBeneficiaryModal" tabindex="-1" aria-labelledby="deleteBeneficiaryModalLabel"

@@ -496,4 +496,67 @@ class AuditLogViewTest extends TestCase
             ->assertSee('beneficiary_batch #3')
             ->assertDontSee('beneficiary_batch #4');
     }
+
+    public function test_searching_a_beneficiary_name_finds_the_encoder_and_batch_assignments(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $encoder = User::factory()->create([
+            'role' => User::ROLE_ENCODER,
+            'name' => 'ENCODER MARIA',
+        ]);
+
+        $beneficiary = Beneficiary::factory()->create([
+            'first_name' => 'SEARCHABLE',
+            'middle_name' => 'BENEFICIARY',
+            'last_name' => 'NAME',
+        ]);
+
+        AuditLog::create([
+            'event_uuid' => (string) Str::uuid(),
+            'user_id' => $encoder->id,
+            'actor_username' => $encoder->username,
+            'actor_name' => $encoder->name,
+            'occurred_at' => now(),
+            'action' => 'beneficiary.created',
+            'entity_type' => 'beneficiary',
+            'entity_id' => $beneficiary->id,
+            'metadata' => ['beneficiary_code' => $beneficiary->beneficiary_code],
+        ]);
+
+        AuditLog::create([
+            'event_uuid' => (string) Str::uuid(),
+            'user_id' => $encoder->id,
+            'actor_username' => $encoder->username,
+            'actor_name' => $encoder->name,
+            'occurred_at' => now(),
+            'action' => 'beneficiary_batch.assigned',
+            'entity_type' => 'beneficiary_batch',
+            'entity_id' => 9001,
+            'metadata' => [
+                'batch_name' => 'BATCH ASSIGNMENT',
+                'count' => 1,
+                'beneficiary_ids' => [$beneficiary->id],
+            ],
+        ]);
+
+        $this->actingAs($admin)->get('/audit?q=SEARCHABLE')
+            ->assertOk()
+            ->assertSee('ENCODER MARIA')
+            ->assertSee('Registered a beneficiary')
+            ->assertSee('BATCH ASSIGNMENT');
+
+        $this->actingAs($admin)->get('/audit?q=DOES NOT MATCH')
+            ->assertOk()
+            ->assertSee('No audit entries match these filters.')
+            ->assertDontSee('BATCH ASSIGNMENT');
+    }
+
+    public function test_the_audit_search_placeholder_mentions_beneficiary_names(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)->get('/audit')
+            ->assertOk()
+            ->assertSee('beneficiary name/code', false);
+    }
 }

@@ -156,6 +156,52 @@ function Read-Env {
     return ""
 }
 
+function Invoke-Migrations {
+    $adminUser = Read-Env "DB_ADMIN_USERNAME"
+    if ([string]::IsNullOrWhiteSpace($adminUser)) { $adminUser = "root" }
+    $adminPass = Read-Env "DB_ADMIN_PASSWORD"
+
+    # XAMPP's root account is normally passwordless. Prefer the optional
+    # DB_ADMIN_* credentials, but fall back to root/blank for the standard
+    # XAMPP installation.
+    $testArgs = @("-h", $dbHost, "-u", $adminUser, "-N", "-B", "-e", "SELECT 1", $dbName)
+    if (-not [string]::IsNullOrEmpty($adminPass)) {
+        $testArgs = @("-h", $dbHost, "-u", $adminUser, "-p$adminPass", "-N", "-B", "-e", "SELECT 1", $dbName)
+    }
+
+    & $mysqlExe @testArgs *> $null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "Admin database credentials ($adminUser) are not available; trying the application database user."
+        Write-Warn "If migrations fail with 'ALTER command denied', set DB_ADMIN_USERNAME/DB_ADMIN_PASSWORD in .env."
+
+        Invoke-Php @($artisan, "migrate", "--force", "--no-interaction")
+        Write-Ok "Migrations applied with the application database user."
+
+        return
+    }
+
+    $envFile = Join-Path $ProjectRoot ".env"
+    $migrationEnvBackup = "$env:TEMP\tims-barmm-migration-env-$timestamp.bak"
+
+    Copy-Item $envFile $migrationEnvBackup -Force
+
+    try {
+        $content = Get-Content $envFile -Raw
+        $content = $content -replace '(?m)^DB_USERNAME=.*$', "DB_USERNAME=$adminUser"
+        $content = $content -replace '(?m)^DB_PASSWORD=.*$', "DB_PASSWORD=$adminPass"
+        [System.IO.File]::WriteAllText($envFile, $content, (New-Object System.Text.UTF8Encoding($false)))
+
+        Invoke-Php @($artisan, "config:clear", "--no-interaction")
+        Invoke-Php @($artisan, "migrate", "--force", "--no-interaction")
+        Write-Ok "Migrations applied with database administrator credentials."
+    } finally {
+        if (Test-Path $migrationEnvBackup) {
+            Copy-Item $migrationEnvBackup $envFile -Force
+            Remove-Item $migrationEnvBackup -Force
+        }
+    }
+}
+
 function Invoke-Rollback {
     Write-Host "`n!! Rolling back to previous version..." -ForegroundColor Red
 
@@ -306,8 +352,7 @@ Write-Step "Running database migrations"
 Write-Phase -Step "Running database migrations" -Percent 72
 
 Invoke-Php @($artisan, "config:clear", "--no-interaction")
-Invoke-Php @($artisan, "migrate", "--force", "--no-interaction")
-Write-Ok "Migrations applied."
+Invoke-Migrations
 
 # ---------------------------------------------------------------------------
 # Step 7: Rebuild caches

@@ -500,4 +500,38 @@ class BeneficiaryCrudTest extends TestCase
             ->assertSee('Edit')
             ->assertSee('id="deleteBeneficiaryModal"', false);
     }
+
+    public function test_missing_cos_filter_and_direct_cos_action(): void
+    {
+        $user = $this->staff();
+
+        $withoutCos = Beneficiary::factory()->named('NO', null, 'COS')->create(['cos_no' => null]);
+        $withCos = Beneficiary::factory()->named('HAS', null, 'COS')->create(['cos_no' => 'COS-EXISTING-1']);
+
+        $this->actingAs($user)->get('/beneficiaries?status=missing_cos')
+            ->assertOk()
+            ->assertSee('Missing COS no.')
+            ->assertSee($withoutCos->beneficiary_code)
+            ->assertDontSee($withCos->beneficiary_code);
+
+        $list = $this->actingAs($user)->get('/beneficiaries')->assertOk();
+        $list->assertSee('data-cos-action="'.route('beneficiaries.cos-no', $withoutCos).'"', false)
+            ->assertDontSee('data-cos-action="'.route('beneficiaries.cos-no', $withCos).'"', false);
+
+        $this->actingAs($user)
+            ->from('/beneficiaries')
+            ->post(route('beneficiaries.cos-no', $withoutCos), ['cos_no' => ' cos-2026-001 '])
+            ->assertRedirect('/beneficiaries')
+            ->assertSessionHas('success');
+
+        $this->assertSame('COS-2026-001', $withoutCos->refresh()->cos_no);
+
+        $this->actingAs($user)
+            ->from('/beneficiaries')
+            ->post(route('beneficiaries.cos-no', $withCos), ['cos_no' => 'COS-REPLACEMENT'])
+            ->assertRedirect('/beneficiaries')
+            ->assertSessionHas('error');
+
+        $this->assertSame('COS-EXISTING-1', $withCos->refresh()->cos_no);
+    }
 }

@@ -50,6 +50,9 @@ class BeneficiaryController extends Controller
                 ? (string) $request->query('sort', 'registered')
                 : 'registered',
             'batch' => $this->resolveBatchFilter($request->query('batch', ''), $batches),
+            'year' => preg_match('/^\d{4}$/', (string) $request->query('year', '')) === 1
+                ? (string) $request->query('year')
+                : '',
         ];
 
         $query = Beneficiary::query()->with('beneficiaryBatch');
@@ -139,8 +142,13 @@ class BeneficiaryController extends Controller
         if ($filters['status'] === 'missing') {
             $query->active();
             $query->where($missingFieldsOnly);
+        } elseif ($filters['status'] === 'missing_cos') {
+            $query->active()
+                ->where(fn ($cos) => $cos->whereNull('cos_no')->orWhere('cos_no', ''));
         } elseif ($filters['status'] === 'archived') {
             $query->archived();
+        } elseif ($filters['status'] === 'inactive') {
+            $query->inactive();
         } elseif ($filters['status'] === 'all') {
             // no filter
         } else {
@@ -151,6 +159,10 @@ class BeneficiaryController extends Controller
             $query->unassigned();
         } elseif (is_numeric($filters['batch'])) {
             $query->where('beneficiary_batch_id', (int) $filters['batch']);
+        }
+
+        if ($filters['year'] !== '') {
+            $query->where('coverage_year', (int) $filters['year']);
         }
 
         // Registration order is the default: the sequence in which records
@@ -191,7 +203,14 @@ class BeneficiaryController extends Controller
             ->orderBy('civil_status')
             ->pluck('civil_status');
 
-        return view('beneficiaries.index', compact('beneficiaries', 'filters', 'civilStatuses', 'batches', 'counts', 'perPage'))
+        $years = Beneficiary::query()
+            ->select('coverage_year')
+            ->distinct()
+            ->whereNotNull('coverage_year')
+            ->orderByDesc('coverage_year')
+            ->pluck('coverage_year');
+
+        return view('beneficiaries.index', compact('beneficiaries', 'filters', 'civilStatuses', 'batches', 'counts', 'perPage', 'years'))
             ->with('managers', OfflineServerEncoder::query()
                 ->with('server')
                 ->where('role', User::ROLE_MANAGER)
@@ -270,8 +289,39 @@ class BeneficiaryController extends Controller
                     .number_format((int) $beneficiaryBatch->capacityLimit()).'). Raise the limit in Settings before adding more beneficiaries.');
         }
 
+        $coverageYear = (int) now()->year;
         $payload = $request->beneficiaryPayload();
         $payload['beneficiary_batch_id'] = $beneficiaryBatch->id;
+        $payload['coverage_year'] = $coverageYear;
+
+        // Re-run the pre-registration duplicate check on the server. The
+        // client-side verification gate is a UX aid, not a security boundary:
+        // a direct POST or changing the name/birthdate after verifying would
+        // otherwise bypass it and create a second record.
+        $duplicate = $this->duplicates->findForRegistration(
+            $payload['first_name'] ?? null,
+            $payload['middle_name'] ?? null,
+            $payload['last_name'] ?? null,
+            isset($payload['birthdate']) ? (string) $payload['birthdate'] : null,
+            $coverageYear,
+        );
+
+        if ($duplicate !== null) {
+            $matches = $duplicate['matches']
+                ->pluck('beneficiary_code')
+                ->filter()
+                ->take(5)
+                ->implode(', ');
+
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'first_name' => 'Possible duplicate: '
+                        .DuplicateDetector::ruleLabel($duplicate['rule'])
+                        .($matches !== '' ? ' — matching record(s): '.$matches : '')
+                        .'. Review the existing record before registering a new beneficiary.',
+                ]);
+        }
 
         try {
             [$beneficiary, $candidates] = DB::transaction(function () use ($payload): array {
@@ -348,13 +398,38 @@ class BeneficiaryController extends Controller
         Gate::authorize('create', Beneficiary::class);
 
         $payload = $request->validated();
+        $currentYear = (int) now()->year;
 
         $candidates = $this->duplicates->findForRegistration(
             $payload['first_name'] ?? null,
             $payload['middle_name'] ?? null,
             $payload['last_name'] ?? null,
             isset($payload['birthdate']) ? (string) $payload['birthdate'] : null,
+            $currentYear,
         );
+
+        $priorApplication = null;
+        $autofill = null;
+
+        if ($candidates === null) {
+            $prior = $this->duplicates->findForRegistration(
+                $payload['first_name'] ?? null,
+                $payload['middle_name'] ?? null,
+                $payload['last_name'] ?? null,
+                isset($payload['birthdate']) ? (string) $payload['birthdate'] : null,
+            );
+
+            if ($prior !== null && $prior['rule'] === 'name_birthdate') {
+                $priorApplication = $prior['matches']
+                    ->filter(fn (Beneficiary $match): bool => (int) $match->coverage_year < $currentYear)
+                    ->sortByDesc(fn (Beneficiary $match): array => [(int) $match->coverage_year, (int) $match->id])
+                    ->first();
+
+                if ($priorApplication !== null) {
+                    $autofill = $this->autofillFields($priorApplication);
+                }
+            }
+        }
 
         $matches = $candidates === null ? [] : $candidates['matches']->map(fn (Beneficiary $match) => [
             'beneficiary_code' => $match->beneficiary_code,
@@ -369,7 +444,47 @@ class BeneficiaryController extends Controller
             'rule' => $candidates['rule'] ?? null,
             'rule_label' => $candidates === null ? null : DuplicateDetector::ruleLabel($candidates['rule']),
             'matches' => $matches,
+            'autofill' => $autofill,
+            'previous_application' => $priorApplication === null ? null : [
+                'beneficiary_code' => $priorApplication->beneficiary_code,
+                'coverage_year' => $priorApplication->coverage_year,
+            ],
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function autofillFields(Beneficiary $beneficiary): array
+    {
+        return [
+            'first_name' => $beneficiary->first_name,
+            'middle_name' => $beneficiary->middle_name,
+            'last_name' => $beneficiary->last_name,
+            'extension_name' => $beneficiary->extension_name,
+            'birthdate' => $beneficiary->birthdate?->toDateString(),
+            'sex' => $beneficiary->sex,
+            'civil_status' => $beneficiary->civil_status,
+            'address' => $beneficiary->address,
+            'location_code' => $beneficiary->location_code,
+            'city_display' => $beneficiary->city_municipality,
+            'province_display' => $beneficiary->province,
+            'id_type' => $beneficiary->id_type,
+            'id_type_other' => $beneficiary->id_type_other,
+            'source_id_no' => $beneficiary->source_id_no,
+            'contact_no' => $beneficiary->contact_no,
+            'beneficiary_type' => $beneficiary->beneficiary_type,
+            'beneficiary_signify' => $beneficiary->beneficiary_signify,
+            'occupation' => $beneficiary->occupation,
+            'occupation_other' => $beneficiary->occupation_other,
+            'mode_of_payment' => $beneficiary->mode_of_payment,
+            'avg_monthly_income' => $beneficiary->avg_monthly_income,
+            'dependent_name' => $beneficiary->dependent_name,
+            'dependent_contact_no' => $beneficiary->dependent_contact_no,
+            'employment_interest' => $beneficiary->employment_interest,
+            'skills_training_needed' => $beneficiary->skills_training_needed,
+            'notes' => $beneficiary->notes,
+        ];
     }
 
     public function show(Beneficiary $beneficiary): View
@@ -379,8 +494,9 @@ class BeneficiaryController extends Controller
         $beneficiary->load('beneficiaryBatch');
 
         $candidates = $this->duplicates->findFor($beneficiary, $beneficiary->id);
+        $timeline = $beneficiary->applicationTimeline();
 
-        return view('beneficiaries.show', compact('beneficiary', 'candidates'));
+        return view('beneficiaries.show', compact('beneficiary', 'candidates', 'timeline'));
     }
 
     public function edit(Beneficiary $beneficiary): View
@@ -429,6 +545,35 @@ class BeneficiaryController extends Controller
         return redirect()
             ->route('beneficiaries.show', $beneficiary)
             ->with('success', 'Beneficiary updated.');
+    }
+
+    /**
+     * Add a COS No. directly from the beneficiary list. Existing values are
+     * immutable from this shortcut so an operator cannot overwrite one by
+     * mistake; use the normal Edit form for corrections.
+     */
+    public function updateCosNo(Request $request, Beneficiary $beneficiary): RedirectResponse
+    {
+        Gate::authorize('update', $beneficiary);
+
+        if (filled($beneficiary->cos_no)) {
+            return back()->with('error', 'This beneficiary already has a COS No. Use Edit to change it.');
+        }
+
+        $validated = $request->validate([
+            'cos_no' => ['required', 'string', 'max:100'],
+        ]);
+
+        $cosNo = strtoupper(trim($validated['cos_no']));
+
+        $beneficiary->update(['cos_no' => $cosNo]);
+
+        AuditLogger::log('beneficiary.cos_no_set', 'beneficiary', $beneficiary->id, [
+            'beneficiary_code' => $beneficiary->beneficiary_code,
+            'cos_no' => $cosNo,
+        ]);
+
+        return back()->with('success', 'COS No. '.$cosNo.' added for '.$beneficiary->full_name.'.');
     }
 
     public function archive(Request $request, Beneficiary $beneficiary): RedirectResponse

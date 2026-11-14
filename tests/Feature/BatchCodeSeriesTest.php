@@ -60,7 +60,7 @@ class BatchCodeSeriesTest extends TestCase
         ]);
 
         $this->createInBatch($admin, $batch);
-        $this->createInBatch($admin, $batch);
+        $this->createInBatch($admin, $batch, ['first_name' => 'SERIES-TWO']);
 
         $codes = Beneficiary::query()->orderBy('id')->pluck('beneficiary_code')->all();
 

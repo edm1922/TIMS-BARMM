@@ -97,7 +97,11 @@ class OnboardingTest extends TestCase
         $this->get('/onboarding')
             ->assertOk()
             ->assertSee('First-time setup')
-            ->assertSee('https://central.test');
+            ->assertSee('https://central.test')
+            ->assertSee('name="area"', false)
+            ->assertDontSee('name="area_name"', false)
+            ->assertDontSee('name="scope_type"', false)
+            ->assertDontSee('name="scope_code"', false);
     }
 
     public function test_a_fresh_offline_installation_redirects_every_page_to_onboarding(): void
@@ -217,6 +221,45 @@ class OnboardingTest extends TestCase
         $this->assertSame(0, User::query()->count());
         $this->assertNull(SyncSetting::get('server_uuid'));
         $this->assertNull(SyncSetting::getEncrypted('server_token'));
+    }
+
+    public function test_onboarding_accepts_the_single_area_selector(): void
+    {
+        $this->configureOffline();
+        $this->fakeCentral();
+
+        $this->seededLocation([
+            'psgc_code' => '1900702000',
+            'province' => 'TEST PROVINCE',
+            'city_municipality' => 'TEST CITY',
+            'barangay' => 'TEST BARANGAY',
+        ]);
+
+        $this->post('/onboarding', [
+            'enrollment_token' => 'one-time-token',
+            'manager_name' => 'Area Manager',
+            'manager_username' => 'areamanager',
+            'manager_password' => 'correct-horse-battery',
+            'manager_password_confirmation' => 'correct-horse-battery',
+            'area' => 'city_municipality|1900702',
+        ])->assertRedirect(route('login'));
+
+        $this->assertSame('city_municipality', SyncSetting::get('scope_type'));
+        $this->assertSame('1900702', SyncSetting::get('scope_code'));
+        $this->assertSame('TEST CITY, TEST PROVINCE', SyncSetting::get('area_name'));
+    }
+
+    public function test_onboarding_requires_an_area_selection(): void
+    {
+        $this->configureOffline();
+
+        $this->post('/onboarding', [
+            'enrollment_token' => 'one-time-token',
+            'manager_name' => 'Area Manager',
+            'manager_username' => 'areamanager',
+            'manager_password' => 'correct-horse-battery',
+            'manager_password_confirmation' => 'correct-horse-battery',
+        ])->assertSessionHasErrors(['area', 'area_name', 'scope_type', 'scope_code']);
     }
 
     public function test_an_existing_account_stops_the_onboarding_redirect(): void

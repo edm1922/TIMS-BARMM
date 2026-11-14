@@ -389,7 +389,10 @@ class ReportExportTest extends TestCase
             ->assertSee('Export XLSX')
             ->assertSee('id="q"', false)
             ->assertSee('name="created_from"', false)
-            ->assertSee('name="duplicate_status"', false);
+            ->assertSee('name="duplicate_status"', false)
+            ->assertSee('data-bs-toggle="dropdown"', false)
+            ->assertSee('Per batch (separate sheets)')
+            ->assertSee('All records in one list');
     }
 
     public function test_the_reports_filters_match_the_beneficiaries_page(): void
@@ -467,5 +470,47 @@ class ReportExportTest extends TestCase
             ->assertSee('Archived')
             ->assertSee('Missing fields')
             ->assertSee('Rows per page');
+    }
+
+    public function test_xlsx_all_batches_export_separates_each_batch_into_its_own_sheet(): void
+    {
+        $batchA = BeneficiaryBatch::factory()->create(['name' => 'BATCH ALPHA']);
+        $batchB = BeneficiaryBatch::factory()->create(['name' => 'BATCH BRAVO']);
+
+        $alpha = Beneficiary::factory()->named('ALPHA', 'ONE', 'MEMBER')
+            ->create(['beneficiary_batch_id' => $batchA->id]);
+        $bravo = Beneficiary::factory()->named('BRAVO', 'TWO', 'MEMBER')
+            ->create(['beneficiary_batch_id' => $batchB->id]);
+
+        $response = $this->actingAs($this->admin())->get('/reports/export?format=xlsx');
+        $response->assertOk();
+
+        $workbook = IOFactory::load($response->getFile()->getPathname());
+        $this->assertSame(['BATCH ALPHA', 'BATCH BRAVO'], $workbook->getSheetNames());
+
+        $this->assertSame('Annex D', $workbook->getSheetByName('BATCH ALPHA')->getCell('C1')->getValue());
+        $this->assertSame($alpha->beneficiary_code, $workbook->getSheetByName('BATCH ALPHA')->getCell('A15')->getValue());
+        $this->assertSame($bravo->beneficiary_code, $workbook->getSheetByName('BATCH BRAVO')->getCell('A15')->getValue());
+
+        // The operator can opt for one continuous list instead.
+        $oneList = $this->actingAs($this->admin())
+            ->get('/reports/export?format=xlsx&xlsx_mode=single');
+        $oneListWorkbook = IOFactory::load($oneList->getFile()->getPathname());
+        $this->assertSame(['Sheet1'], $oneListWorkbook->getSheetNames());
+        $this->assertSame($alpha->beneficiary_code, $oneListWorkbook->getSheet(0)->getCell('A15')->getValue());
+        $this->assertSame($bravo->beneficiary_code, $oneListWorkbook->getSheet(0)->getCell('A16')->getValue());
+
+        // A selected batch hides the layout choices and keeps one sheet.
+        $this->actingAs($this->admin())
+            ->get('/reports?batch='.$batchA->id)
+            ->assertOk()
+            ->assertDontSee('Per batch (separate sheets)')
+            ->assertDontSee('All records in one list');
+
+        $single = $this->actingAs($this->admin())
+            ->get('/reports/export?format=xlsx&batch='.$batchA->id);
+        $singleWorkbook = IOFactory::load($single->getFile()->getPathname());
+        $this->assertSame(['Sheet1'], $singleWorkbook->getSheetNames());
+        $this->assertSame($alpha->beneficiary_code, $singleWorkbook->getSheet(0)->getCell('A15')->getValue());
     }
 }

@@ -306,6 +306,24 @@ class ImportController extends Controller
             ->groupBy('outcome')
             ->pluck('total', 'outcome');
 
+        $targetBatch = $importBatch->beneficiaryBatch;
+        $projectedInserts = $this->service->projectedInserts($importBatch);
+        $remainingSlots = $targetBatch?->remainingCapacity();
+
+        $capacityWarning = null;
+
+        if ($importBatch->status === 'previewed'
+            && $targetBatch !== null
+            && $remainingSlots === 0
+            && $projectedInserts > 0) {
+            $capacityWarning = [
+                'batch' => $targetBatch,
+                'projected' => $projectedInserts,
+                'members' => $targetBatch->memberCount(),
+                'limit' => $targetBatch->capacityLimit(),
+            ];
+        }
+
         $allCandidateIds = $importBatch->rows()->whereNotNull('candidate_ids')->limit(5000)->get()
             ->flatMap(fn ($row) => $row->candidate_ids ?? [])
             ->unique()
@@ -369,6 +387,7 @@ class ImportController extends Controller
             'duplicates' => $duplicates,
             'duplicateSummary' => $duplicateSummary,
             'failedRows' => $failedRows,
+            'capacityWarning' => $capacityWarning,
         ]);
     }
 
@@ -391,6 +410,18 @@ class ImportController extends Controller
         ], [
             'confirm.accepted' => 'Confirm the batch summary before applying.',
         ]);
+
+        $targetBatch = $importBatch->beneficiaryBatch;
+        $remainingSlots = $targetBatch?->remainingCapacity();
+        $projectedInserts = $this->service->projectedInserts($importBatch, array_filter($data['decisions']));
+
+        if ($targetBatch !== null && $remainingSlots === 0 && $projectedInserts > 0) {
+            return redirect()->route('imports.show', $importBatch)
+                ->with('error', 'Cannot apply: batch "'.$targetBatch->name.'" is full ('
+                    .number_format($targetBatch->memberCount()).' / '.number_format((int) $targetBatch->capacityLimit())
+                    .'). This import would add '.number_format($projectedInserts)
+                    .' new record(s). Increase the batch limit or skip the new rows before applying.');
+        }
 
         $result = $this->service->apply($importBatch, array_filter($data['decisions']));
 
@@ -449,7 +480,7 @@ class ImportController extends Controller
      * Bypass a failed government-ID conflict: leave the conflicted field blank,
      * import the row, and flag the created beneficiary as missing that field.
      */
-    public function bypassRow(Request $request, ImportBatch $importBatch, int $importRow, \App\Services\Import\ImportService $imports): RedirectResponse
+    public function bypassRow(Request $request, ImportBatch $importBatch, int $importRow, ImportService $imports): RedirectResponse
     {
         Gate::authorize('apply', $importBatch);
 

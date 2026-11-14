@@ -45,6 +45,8 @@ final class SyncPayload
         'employment_interest',
         'skills_training_needed',
         'notes',
+        'coverage_year',
+        'is_active',
         'archived_at',
         'archive_reason',
     ];
@@ -53,6 +55,10 @@ final class SyncPayload
         'name',
         'description',
         'status',
+        'capacity',
+        'beneficiary_code_series',
+        'profiled_on',
+        'program_year',
         'manager_uuid',
     ];
 
@@ -71,7 +77,10 @@ final class SyncPayload
         }
 
         if ($model instanceof BeneficiaryBatch) {
-            return $model->only(self::BATCH_FIELDS);
+            $payload = $model->only(self::BATCH_FIELDS);
+            $payload['profiled_on'] = $model->profiled_on?->toDateString();
+
+            return $payload;
         }
 
         return [];

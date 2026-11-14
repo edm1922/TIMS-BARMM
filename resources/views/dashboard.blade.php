@@ -393,7 +393,8 @@
 
     {{-- Row 4: recent imports + quick actions --}}
     <div class="row g-3 align-items-stretch mt-0">
-        <div class="col-12 col-xl-8">
+        @if (\App\Support\SyncIdentity::isOnline())
+            <div class="col-12 col-xl-8">
             <div class="card panel-card h-100">
                 <div class="panel-card-header">
                     <div>
@@ -475,8 +476,9 @@
                     </table>
                 </div>
             </div>
-        </div>
-        <div class="col-12 col-xl-4">
+            </div>
+        @endif
+        <div class="col-12 {{ \App\Support\SyncIdentity::isOnline() ? 'col-xl-4' : 'col-xl-12' }}">
             <div class="card panel-card h-100">
                 <div class="panel-card-header">
                     <div>
@@ -513,7 +515,7 @@
                                 </div>
                             </a>
                         @endif
-                        @if (Route::has('imports.create'))
+                        @if (Route::has('imports.create') && \App\Support\SyncIdentity::isOnline())
                             <a class="quick-action" href="{{ route('imports.create') }}">
                                 <div class="quick-action-icon">
                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -750,7 +752,18 @@
 </style>
 
 @push('scripts')
-<script src="{{ asset('assets/vendor/chart.js/chart.umd.min.js') }}"></script>
+@php
+    // Offline installations may not expose the nested assets/vendor directory
+    // through every Apache configuration. Bundle the same library with the
+    // Views so charts keep working without a second HTTP request.
+    $chartLibrary = resource_path('vendor/chart.umd.min.js');
+@endphp
+@if (config('sync.instance_mode') === 'offline' && is_file($chartLibrary))
+    <!-- chart.umd.min.js bundled inline for offline installations -->
+    <script>{!! file_get_contents($chartLibrary) !!}</script>
+@else
+    <script src="{{ asset('assets/vendor/chart.js/chart.umd.min.js') }}"></script>
+@endif
 <script>
 (function () {
     'use strict';

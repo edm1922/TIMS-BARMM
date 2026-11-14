@@ -140,6 +140,8 @@ class InstallationPackageTest extends TestCase
         $this->assertContains('SHA256SUMS.txt', $entries);
         $this->assertTrue((bool) collect($entries)->first(fn (string $entry) => str_starts_with($entry, 'app/Models/User.php')));
         $this->assertTrue((bool) collect($entries)->first(fn (string $entry) => str_starts_with($entry, 'scripts/setup-offline.ps1')));
+        $this->assertContains('scripts/enable-php-extensions.ps1', $entries);
+        $this->assertContains('scripts/purge-orphan-batches.ps1', $entries);
     }
 
     public function test_generated_packages_exclude_cached_config_credentials(): void
@@ -211,6 +213,10 @@ class InstallationPackageTest extends TestCase
         $this->assertStringContainsString('-Repair', $instructions);
         $this->assertStringContainsString('-Reinstall', $instructions);
         $this->assertStringContainsString('SHA256SUMS.txt', $instructions);
+        $this->assertStringContainsString('Enable PHP and the required PHP extensions', $instructions);
+        $this->assertStringContainsString('extension=pdo_mysql', $instructions);
+        $this->assertStringContainsString('php.ini', $instructions);
+        $this->assertStringContainsString('restart Apache', $instructions);
         $this->assertStringContainsString('WARNING: CENTRAL SERVER ADDRESS', $instructions);
         $this->assertStringNotContainsString('DB_PASSWORD', $instructions);
     }

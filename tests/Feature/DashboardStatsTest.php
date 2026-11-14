@@ -694,4 +694,15 @@ class DashboardStatsTest extends TestCase
             ->assertSee('Beneficiary Registration Trend')
             ->assertSee('Year-Based Batch Distribution');
     }
+
+    public function test_offline_dashboard_bundles_chartjs_with_the_view(): void
+    {
+        config()->set('sync.instance_mode', 'offline');
+
+        $this->actingAs($this->admin())->get('/dashboard')
+            ->assertOk()
+            ->assertSee('chart.umd.min.js bundled inline for offline installations')
+            ->assertSee('new Chart(', false);
+    }
+
 }

@@ -287,4 +287,107 @@ class SyncFoundationTest extends TestCase
             'is_city' => true,
         ]);
     }
+
+    public function test_batch_settings_are_synchronized_in_the_payload_and_applied_offline(): void
+    {
+        $batch = BeneficiaryBatch::factory()->create([
+            'origin_server_uuid' => '11111111-1111-4111-8111-111111111111',
+            'name' => 'Settings Sync Batch',
+            'status' => BeneficiaryBatch::STATUS_OPEN,
+            'capacity' => 125,
+            'beneficiary_code_series' => 'SETTINGS-00125',
+            'profiled_on' => '2025-06-15',
+            'program_year' => 2026,
+        ]);
+
+        $batch->update(['capacity' => 150]);
+
+        $change = SyncChange::query()
+            ->where('entity_type', 'beneficiary_batch')
+            ->where('entity_uuid', $batch->global_uuid)
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertContains('capacity', $change->payload['changed_fields']);
+        $this->assertSame(150, $change->payload['data']['capacity']);
+        $this->assertSame('SETTINGS-00125', $change->payload['data']['beneficiary_code_series']);
+        $this->assertSame('2025-06-15', $change->payload['data']['profiled_on']);
+        $this->assertSame(2026, $change->payload['data']['program_year']);
+
+        $entityUuid = (string) Str::uuid();
+
+        $result = app(LocalChangeApplier::class)->apply([
+            'change_uuid' => (string) Str::uuid(),
+            'entity_type' => 'beneficiary_batch',
+            'entity_uuid' => $entityUuid,
+            'operation' => 'created',
+            'origin_server_uuid' => '11111111-1111-4111-8111-111111111111',
+            'revision' => 1,
+            'payload' => [
+                'changed_fields' => ['name', 'capacity', 'beneficiary_code_series', 'profiled_on', 'program_year'],
+                'data' => [
+                    'name' => 'Offline Settings Batch',
+                    'description' => null,
+                    'status' => BeneficiaryBatch::STATUS_OPEN,
+                    'capacity' => 150,
+                    'beneficiary_code_series' => 'SETTINGS-00150',
+                    'profiled_on' => '2025-07-01',
+                    'program_year' => 2026,
+                    'manager_uuid' => null,
+                ],
+            ],
+        ]);
+
+        $this->assertSame('applied', $result);
+
+        $synced = BeneficiaryBatch::query()->where('global_uuid', $entityUuid)->firstOrFail();
+        $this->assertSame(150, $synced->capacity);
+        $this->assertSame('SETTINGS-00150', $synced->beneficiary_code_series);
+        $this->assertSame('2025-07-01', $synced->profiled_on?->toDateString());
+        $this->assertSame(2026, $synced->program_year);
+    }
+
+    public function test_an_updated_central_record_rekeys_a_local_government_id_duplicate(): void
+    {
+        $origin = '11111111-1111-4111-8111-111111111111';
+        $local = Beneficiary::factory()->create([
+            'origin_server_uuid' => $origin,
+            'source_id_no' => 'COLLIDE-GOV-1',
+            'beneficiary_code' => 'LOCAL-CODE-1',
+            'first_name' => 'OLD',
+            'last_name' => 'IDENTITY',
+        ]);
+
+        $incomingUuid = (string) Str::uuid();
+
+        $result = app(LocalChangeApplier::class)->apply([
+            'change_uuid' => (string) Str::uuid(),
+            'entity_type' => 'beneficiary',
+            'entity_uuid' => $incomingUuid,
+            'operation' => 'updated',
+            'origin_server_uuid' => $origin,
+            'revision' => 2,
+            'payload' => [
+                'changed_fields' => ['first_name', 'last_name', 'source_id_no'],
+                'data' => [
+                    'beneficiary_code' => 'CENTRAL-CODE-1',
+                    'source_id_number' => null,
+                    'source_id_no' => 'COLLIDE-GOV-1',
+                    'first_name' => 'CENTRAL',
+                    'middle_name' => null,
+                    'last_name' => 'PERSON',
+                    'birthdate' => null,
+                ],
+            ],
+        ]);
+
+        $this->assertSame('applied', $result);
+        $this->assertSame(1, Beneficiary::query()->where('source_id_no', 'COLLIDE-GOV-1')->count());
+
+        $local->refresh();
+        $this->assertSame($incomingUuid, $local->global_uuid);
+        $this->assertSame('CENTRAL', $local->first_name);
+        $this->assertSame('PERSON', $local->last_name);
+        $this->assertDatabaseHas('sync_events', ['type' => 'identity.reconciled']);
+    }
 }

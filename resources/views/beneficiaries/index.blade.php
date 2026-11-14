@@ -34,6 +34,9 @@
             ? 'Unassigned'
             : (collect($batches)->firstWhere('id', (int) $filters['batch'])?->name ?? $filters['batch']);
     }
+    if (($filters['year'] ?? '') !== '') {
+        $filterLabels['Year'] = $filters['year'];
+    }
     if ($filters['sort'] !== 'registered') {
         $filterLabels['Sort'] = [
             'newest' => 'Newest registered first',
@@ -44,6 +47,8 @@
     $filterLabels['Records'] = match ($filters['status']) {
         'all' => 'All',
         'missing' => 'Missing fields',
+        'missing_cos' => 'Missing COS no.',
+        'inactive' => 'Inactive',
         default => 'Active',
     };
     $hasFilters = $filters['q'] !== ''
@@ -54,6 +59,7 @@
         || $filters['civil_status'] !== ''
         || $filters['status'] !== 'active'
         || $filters['batch'] !== ''
+        || ($filters['year'] ?? '') !== ''
         || $filters['sort'] !== 'registered';
 @endphp
 
@@ -236,10 +242,20 @@
                 </select>
             </div>
 
+            <div class="span-2">
+                <label class="sync-kv-label d-block mb-1" for="year">Year</label>
+                <select class="sync-input" id="year" name="year" onchange="this.form.submit()">
+                    <option value="" @selected(($filters['year'] ?? '') === '')>All years</option>
+                    @foreach ($years as $year)
+                        <option value="{{ $year }}" @selected(($filters['year'] ?? '') === (string) $year)>{{ $year }}</option>
+                    @endforeach
+                </select>
+            </div>
+
             <div class="span-4">
                 <span class="sync-kv-label d-block mb-1">Records</span>
                 <div class="report-status" role="radiogroup" aria-label="Record status">
-                    @foreach (['active' => 'Active', 'all' => 'All', 'missing' => 'Missing fields'] as $value => $label)
+                    @foreach (['active' => 'Active', 'all' => 'All', 'inactive' => 'Inactive', 'missing' => 'Missing fields', 'missing_cos' => 'Missing COS no.'] as $value => $label)
                         <div class="form-check">
                             <input class="form-check-input" type="radio" name="status" id="status-{{ $value }}"
                                    value="{{ $value }}" onchange="this.form.submit()" @checked($filters['status'] === $value)>
@@ -291,6 +307,9 @@
                             <tr>
                                 <td>
                                     <span class="report-id" title="{{ $beneficiary->beneficiary_code }}">{{ $beneficiary->beneficiary_code }}</span>
+                                    @if ($beneficiary->isInactive())
+                                        <span class="sync-pill sync-pill--neutral">Inactive</span>
+                                    @endif
                                 </td>
                                 <td>
                                     <a class="report-name" href="{{ route('beneficiaries.show', $beneficiary) }}">{{ $beneficiary->full_name }}</a>
@@ -303,6 +322,17 @@
                                 <td class="text-end text-nowrap">
                                     <a class="sync-btn sync-btn--secondary sync-btn--small" href="{{ route('beneficiaries.show', $beneficiary) }}">View</a>
                                     <a class="sync-btn sync-btn--small" style="color: var(--sync-primary); background: #fff; border-color: #bfdbfe;" href="{{ route('beneficiaries.edit', $beneficiary) }}">Edit</a>
+                                    @can('update', $beneficiary)
+                                        @if (blank($beneficiary->cos_no))
+                                            <button type="button" class="sync-btn sync-btn--small"
+                                                    style="color: #7c3aed; background: #fff; border-color: #ddd6fe;"
+                                                    data-bs-toggle="modal" data-bs-target="#addCosModal"
+                                                    data-cos-action="{{ route('beneficiaries.cos-no', $beneficiary) }}"
+                                                    data-cos-name="{{ $beneficiary->full_name }}">
+                                                Add COS
+                                            </button>
+                                        @endif
+                                    @endcan
                                 </td>
                             </tr>
                         @endforeach
@@ -334,6 +364,34 @@
             </div>
         @endif
     </section>
+
+    <div class="modal fade" id="addCosModal" tabindex="-1" aria-labelledby="addCosModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form method="POST" id="addCosForm">
+                    @csrf
+                    <div class="modal-header">
+                        <div>
+                            <h2 class="modal-title h6 mb-1" id="addCosModalLabel">Add COS No.</h2>
+                            <p class="text-muted small mb-0">Add the COS number for this beneficiary.</p>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="small mb-3">Beneficiary: <strong data-cos-beneficiary></strong></p>
+                        <label class="form-label" for="add_cos_no">COS No.</label>
+                        <input type="text" class="form-control" id="add_cos_no" name="cos_no" maxlength="100"
+                               required placeholder="e.g. COS-2026-001" autocomplete="off">
+                        <div class="form-text">Once saved, use the Edit page to correct this value.</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save COS No.</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     @if ($canCreate)
         @include('batches.partials.create-modal')
@@ -368,6 +426,27 @@ document.addEventListener('DOMContentLoaded', function () {
             this.form.submit();
         }
     });
+
+    var cosModal = document.getElementById('addCosModal');
+    if (cosModal) {
+        cosModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var form = document.getElementById('addCosForm');
+            var input = document.getElementById('add_cos_no');
+            var name = cosModal.querySelector('[data-cos-beneficiary]');
+
+            if (form && button) {
+                form.action = button.getAttribute('data-cos-action') || '';
+            }
+            if (name && button) {
+                name.textContent = button.getAttribute('data-cos-name') || '';
+            }
+            if (input) {
+                input.value = '';
+                window.setTimeout(function () { input.focus(); }, 150);
+            }
+        });
+    }
 });
 </script>
 @endsection
